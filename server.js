@@ -584,6 +584,61 @@ Bạn có thể thử hỏi nghĩa của các từ cụ thể như *"răng"*, *"
     return;
   }
 
+  // --- API ROUTE: /api/approve-audio ---
+  if (req.method === 'POST' && safeUrl === '/api/approve-audio') {
+    readPostBody(req).then((body) => {
+      const { id, title, province, speaker, ageGroup, gender, topic, audioUrl, transcriptDialect, transcriptStandard } = body;
+      if (!title || !province) {
+        res.statusCode = 400;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: 'Missing required fields' }));
+        return;
+      }
+
+      try {
+        const dataFilePath = path.join(__dirname, 'data.js');
+        let fileContent = fs.readFileSync(dataFilePath, 'utf-8');
+
+        const dialectGroup = province === "Thanh Hóa" ? "Thanh Hóa" : (province === "Nghệ An" || province === "Hà Tĩnh" ? "Nghệ Tĩnh" : "Bình Trị Thiên");
+        
+        const approvedRecordObject = {
+          id: id || ("p_" + Date.now()),
+          title: title,
+          province: province,
+          dialectGroup: dialectGroup,
+          speaker: speaker || "Đóng góp",
+          ageGroup: ageGroup || "18-35",
+          gender: gender || "Nam",
+          topic: topic || "Lịch sử & Văn hóa",
+          audioUrl: audioUrl || "",
+          transcriptDialect: transcriptDialect || "Giọng đọc đóng góp",
+          transcriptStandard: transcriptStandard || "Giọng đọc đóng góp",
+          verified: true,
+          confidence: 95,
+          tags: [topic ? topic.split(' ')[0] : "Đóng góp", province]
+        };
+
+        const serialized = JSON.stringify(approvedRecordObject, null, 2);
+        const formatted = serialized.split('\n').map((line, idx) => idx === 0 ? line : '  ' + line).join('\n');
+
+        fileContent = fileContent.replace('const AUDIO_CORPUS = [', `const AUDIO_CORPUS = [\n  ${formatted},`);
+
+        fs.writeFileSync(dataFilePath, fileContent, 'utf-8');
+        loadDatabase();
+
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.end(JSON.stringify({ success: true, record: approvedRecordObject }));
+      } catch (err) {
+        console.error("Failed to append approved audio to data.js:", err);
+        res.statusCode = 500;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: 'Failed to write to database file' }));
+      }
+    });
+    return;
+  }
+
   const filePath = path.join(PUBLIC_DIR, safeUrl);
 
   if (!filePath.startsWith(PUBLIC_DIR)) {

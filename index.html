@@ -10,6 +10,7 @@
   
   <!-- Core Custom Styles -->
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="src/components/Minigames/MinigameUI.css" />
 </head>
 <body>
 
@@ -162,11 +163,6 @@
               <!-- Map filters toolbar -->
               <div class="map-controls">
                 <div class="map-filters">
-                  <select class="filter-select" id="map-filter-theme" style="background-color: var(--bg-surface); color: var(--text-main); border: 1px solid var(--border-color); font-weight: 600;">
-                    <option value="nature-mountains">🌾 🌄 Ruộng Bậc Thang & Sơn Thủy (Nền Nhạt Nổi Bản Đồ)</option>
-                    <option value="dongson-full">🎨 Sơn Thủy & Mây Sóng (Hài Hòa Tươi Sáng)</option>
-                    <option value="cyber-dark">🌌 Cyber Digital (Nền Đêm Dạ Quang)</option>
-                  </select>
                   <select class="filter-select" id="map-filter-age" style="background-color: var(--bg-surface); color: var(--text-main); border: 1px solid var(--border-color);">
                     <option value="all">Mọi độ tuổi</option>
                     <option value="18-35">Độ tuổi 18-35</option>
@@ -338,6 +334,9 @@
                 <i class="fas fa-search"></i>
                 <input type="text" class="search-input" id="dict-search-input" placeholder="Tìm từ khóa phương ngữ hoặc nghĩa..." />
               </div>
+              <div style="text-align: center; margin-top: 8px; font-size: 12px; color: #9ca3af; font-style: italic;">
+                Dữ liệu được hỗ trợ bởi AI chỉ mang tính chất tham khảo. Hệ thống rất mong nhận được phản hồi đóng góp từ bạn!
+              </div>
             </div>
 
             <!-- MIDDLE SECTION: DIALECT REGION CHOICES -->
@@ -504,8 +503,8 @@
                 </div>
               </div>
               
-              <div style="font-size: 11px; color: var(--text-muted); margin-top: 20px; font-style: italic; text-align: right;">
-                * Lưu ý: Kết quả do mô hình AI xử lý kết hợp RAG chỉ mang tính chất tham khảo.
+              <div style="font-size: 12px; color: #9ca3af; margin-top: 20px; font-style: italic; text-align: center;">
+                Dữ liệu được hỗ trợ bởi AI chỉ mang tính chất tham khảo. Hệ thống rất mong nhận được phản hồi đóng góp từ bạn!
               </div>
             </div>
 
@@ -556,6 +555,9 @@
                   <i class="fas fa-paper-plane"></i>
                 </button>
               </div>
+              <div style="text-align: center; padding: 6px 12px 2px 12px; font-size: 11px; color: #9ca3af; font-style: italic;">
+                Dữ liệu được hỗ trợ bởi AI chỉ mang tính chất tham khảo. Hệ thống rất mong nhận được phản hồi đóng góp từ bạn!
+              </div>
             </div>
 
           </div>
@@ -564,71 +566,176 @@
         <!-- ========================================== -->
         <!-- VIEW 5: MINI GAMES & QUIZZES -->
         <!-- ========================================== -->
+        <!-- ========================================== -->
+        <!-- VIEW 5: MINI GAMES & QUIZZES -->
+        <!-- ========================================== -->
         <div class="app-view" id="quizzes-view">
-          
-          <!-- Hub selection screen -->
-          <div class="games-hub" id="games-hub">
+          <div class="minigame-wrapper">
             
-            <div class="game-hub-card" onclick="window.voiceBankGames.launchGame(1)">
-              <div class="game-hub-icon"><i class="fas fa-headphones-alt"></i></div>
-              <div class="game-hub-info">
-                <h3>Game 1: Nghe giọng đoán vùng</h3>
-                <p>Lắng nghe đoạn audio ngắn từ 5-10 giây và phán đoán xem người nói thuộc cụm phương ngữ nào.</p>
-                <div style="font-size: 12px; color: var(--color-primary); margin-top: 10px; font-weight: 600;">Điểm kỷ lục: <span id="hs-g1">0</span></div>
+            <!-- STEP 1: GAME HUB VIEW -->
+            <div id="mg-hub-view">
+              <div class="mg-hub-header">
+                <div>
+                  <h2><i class="fas fa-gamepad"></i> Trung tâm Trò chơi Phương ngữ</h2>
+                  <p>Khám phá, thử thách và nâng cao vốn từ vựng 6 tỉnh Bắc Trung Bộ qua 3 Minigame tương tác sinh động.</p>
+                  <div id="mg-hub-player-info" style="margin-top: 10px;"></div>
+                </div>
+                <button class="btn-mg-leaderboard" onclick="window.voiceBankGames.openLeaderboard()">
+                  <i class="fas fa-trophy" style="color: #f59e0b;"></i> Xem Bảng Xếp Hạng
+                </button>
+              </div>
+
+              <!-- 3 Game Cards Grid -->
+              <div class="mg-cards-grid">
+                
+                <!-- Card 1: Game 1 -->
+                <div class="mg-card card-g1">
+                  <div>
+                    <div class="mg-card-badge"><i class="fas fa-bolt"></i> Trắc nghiệm & Combo</div>
+                    <div class="mg-card-icon"><i class="fas fa-brain"></i></div>
+                    <h3 class="mg-card-title">Game 1: Giải nghĩa phương ngữ</h3>
+                    <p class="mg-card-desc">Thử thách 10 câu trắc nghiệm nghĩa chuẩn với đếm ngược 15s, kích hoạt Chuỗi thắng (Streak Combo x2) và khung giải thích ngữ cảnh thực tế.</p>
+                  </div>
+                  <div class="mg-card-footer">
+                    <div class="mg-high-score">Kỷ lục: <span id="mg-hs-g1">0</span> đ</div>
+                    <button class="btn-mg-play" onclick="window.voiceBankGames.promptStartGame(1)">
+                      Chơi ngay <i class="fas fa-play-circle"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Card 2: Game 2 -->
+                <div class="mg-card card-g2">
+                  <div>
+                    <div class="mg-card-badge"><i class="fas fa-puzzle-piece"></i> Phản xạ Ghép đôi</div>
+                    <div class="mg-card-icon"><i class="fas fa-object-ungroup"></i></div>
+                    <h3 class="mg-card-title">Game 2: Ghép cặp từ vựng</h3>
+                    <p class="mg-card-desc">Nối các từ phương ngữ độc đáo ở cột bên trái với nghĩa tiếng phổ thông tương ứng bên phải. Đúng đổi xanh biến mất mượt mà, sai rung đỏ.</p>
+                  </div>
+                  <div class="mg-card-footer">
+                    <div class="mg-high-score">Kỷ lục: <span id="mg-hs-g2">0</span> đ</div>
+                    <button class="btn-mg-play" onclick="window.voiceBankGames.promptStartGame(2)">
+                      Chơi ngay <i class="fas fa-play-circle"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Card 3: Game 3 -->
+                <div class="mg-card card-g3">
+                  <div>
+                    <div class="mg-card-badge"><i class="fas fa-keyboard"></i> Đoán từ & Ô chữ</div>
+                    <div class="mg-card-icon"><i class="fas fa-border-all"></i></div>
+                    <h3 class="mg-card-title">Game 3: Ô chữ phương ngữ</h3>
+                    <p class="mg-card-desc">Dựa vào gợi ý nghĩa phổ thông, điền các chữ cái còn thiếu vào dãy ô vuông bằng bàn phím thực hoặc bàn phím ảo hiển thị trên màn hình.</p>
+                  </div>
+                  <div class="mg-card-footer">
+                    <div class="mg-high-score">Kỷ lục: <span id="mg-hs-g3">0</span> đ</div>
+                    <button class="btn-mg-play" onclick="window.voiceBankGames.promptStartGame(3)">
+                      Chơi ngay <i class="fas fa-play-circle"></i>
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+              <div style="text-align: center; margin-top: 24px; font-size: 12px; color: #9ca3af; font-style: italic;">
+                Dữ liệu được hỗ trợ bởi AI chỉ mang tính chất tham khảo. Hệ thống rất mong nhận được phản hồi đóng góp từ bạn!
               </div>
             </div>
 
-            <div class="game-hub-card purple-theme" onclick="window.voiceBankGames.launchGame(2)">
-              <div class="game-hub-icon"><i class="fas fa-align-left"></i></div>
-              <div class="game-hub-info">
-                <h3>Game 2: Giải nghĩa phương ngữ</h3>
-                <p>Thử thách trắc nghiệm nghĩa chuẩn của các từ địa phương Thanh - Nghệ - Tĩnh - Bình - Trị - Thiên.</p>
-                <div style="font-size: 12px; color: var(--color-purple); margin-top: 10px; font-weight: 600;">Điểm kỷ lục: <span id="hs-g2">0</span></div>
+            <!-- ACTIVE GAME ARENA CONTAINER -->
+            <div class="mg-arena" id="mg-arena-view">
+              <div class="mg-arena-topbar">
+                <button class="btn-mg-back" onclick="window.voiceBankGames.renderHub()">
+                  <i class="fas fa-arrow-left"></i> Quay lại Hub
+                </button>
+                <h3 class="mg-arena-title" id="mg-arena-title">Tên trò chơi</h3>
+                <div class="mg-arena-stats">
+                  <div class="mg-stat-pill score">🏆 Điểm: <span id="mg-score-val">0</span></div>
+                  <div class="mg-stat-pill wrong">❌ Sai: <span id="mg-wrong-val">0</span></div>
+                </div>
               </div>
-            </div>
-
-            <div class="game-hub-card purple-theme" onclick="window.voiceBankGames.launchGame(3)">
-              <div class="game-hub-icon"><i class="fas fa-link"></i></div>
-              <div class="game-hub-info">
-                <h3>Game 3: Ghép cặp từ vựng</h3>
-                <p>Nối các phương ngữ độc đáo ở cột bên trái với nghĩa phổ thông thích hợp ở cột bên phải.</p>
-                <div style="font-size: 12px; color: var(--color-purple); margin-top: 10px; font-weight: 600;">Điểm kỷ lục: <span id="hs-g3">0</span></div>
-              </div>
-            </div>
-
-            <div class="game-hub-card" onclick="window.voiceBankGames.launchGame(4)">
-              <div class="game-hub-icon"><i class="fas fa-tag"></i></div>
-              <div class="game-hub-info">
-                <h3>Game 4: Đoán chủ đề bản ghi</h3>
-                <p>Dựa trên nội dung nói hoặc giai điệu, đoán xem bản ghi âm thuộc chủ đề văn hóa nào.</p>
-                <div style="font-size: 12px; color: var(--color-primary); margin-top: 10px; font-weight: 600;">Điểm kỷ lục: <span id="hs-g4">0</span></div>
+              <div id="mg-arena-body">
+                <!-- Loaded dynamically by MinigameEngine.js -->
               </div>
             </div>
 
           </div>
 
-          <!-- Active Game Arena container -->
-          <div class="game-arena" id="game-arena">
-            <div class="game-header">
-              <div class="game-header-title">
-                <button class="back-to-hub" onclick="window.voiceBankGames.initHub()"><i class="fas fa-chevron-left"></i> Quay lại Hub</button>
-                <h3 id="game-title">Tên trò chơi</h3>
+          <!-- STEP 2: NICKNAME / START MODAL (SAFE NON-BLOCKING) -->
+          <div class="mg-modal-backdrop" id="mg-start-modal">
+            <div class="mg-modal-card">
+              <button class="mg-modal-close" onclick="window.voiceBankGames.closeStartModal()"><i class="fas fa-times"></i></button>
+              <div class="mg-modal-header">
+                <h3><i class="fas fa-user-astronaut" style="color: #0284c7;"></i> Sẵn sàng thử thách!</h3>
+                <p>Nhập tên hoặc biệt danh để bắt đầu tính điểm và ghi danh vào Bảng Xếp Hạng.</p>
               </div>
-              <div class="game-scoreboard">
-                <span class="score-badge">Đúng: <span id="game-score-val">0</span></span>
-                <span class="score-badge wrong">Sai: <span id="game-wrong-val">0</span></span>
-              </div>
-            </div>
-            
-            <div class="game-body" id="game-arena-content">
-              <!-- Content loaded dynamically by games.js -->
-            </div>
-            
-            <!-- Result/Feedback display block -->
-            <div class="quiz-feedback" id="quiz-feedback">
-              <!-- Populated dynamically -->
+              <div id="mg-welcome-banner" class="mg-welcome-banner" style="display: none;"></div>
+              <input type="text" id="mg-nickname-field" class="mg-nickname-input" placeholder="Ví dụ: Người con xứ Nghệ, Nguyễn Văn A..." maxlength="25" />
+              <button class="btn-mg-submit-start" onclick="window.voiceBankGames.submitStartModal()">
+                🚀 Bắt đầu tính điểm
+              </button>
             </div>
           </div>
+
+          <!-- STEP 4: RESULT MODAL (GAME OVER) -->
+          <div class="mg-modal-backdrop" id="mg-result-modal">
+            <div class="mg-modal-card" style="text-align: center;">
+              <button class="mg-modal-close" onclick="window.voiceBankGames.closeResultModal()"><i class="fas fa-times"></i></button>
+              <div class="mg-result-badge">🏆</div>
+              <div class="mg-modal-header">
+                <h3>Hoàn thành lượt chơi!</h3>
+                <p>Chúc mừng bạn đã đạt kết quả xuất sắc trong thử thách phương ngữ.</p>
+              </div>
+              <div class="mg-result-scores">
+                <div class="mg-score-box">
+                  <span class="mg-score-val" id="mg-res-score">0</span>
+                  <span class="mg-score-lbl">Tổng điểm</span>
+                </div>
+                <div class="mg-score-box">
+                  <span class="mg-score-val" style="color: #10b981;" id="mg-res-correct">0</span>
+                  <span class="mg-score-lbl">Câu đúng</span>
+                </div>
+                <div class="mg-score-box">
+                  <span class="mg-score-val" style="color: #f59e0b;" id="mg-res-time">0s</span>
+                  <span class="mg-score-lbl">Thời gian</span>
+                </div>
+              </div>
+              <div style="display: flex; gap: 12px;">
+                <button class="btn-mg-back" style="flex: 1; justify-content: center; padding: 12px;" onclick="window.voiceBankGames.closeResultModal()">
+                  <i class="fas fa-redo"></i> Chơi lượt mới
+                </button>
+                <button class="btn-mg-submit-start" style="flex: 1; padding: 12px;" onclick="window.voiceBankGames.closeResultModal(); window.voiceBankGames.openLeaderboard();">
+                  <i class="fas fa-trophy"></i> Xem Bảng Xếp Hạng
+                </button>
+              </div>
+              <div style="text-align: center; margin-top: 14px; font-size: 11px; color: #9ca3af; font-style: italic;">
+                Dữ liệu được hỗ trợ bởi AI chỉ mang tính chất tham khảo. Hệ thống rất mong nhận được phản hồi đóng góp từ bạn!
+              </div>
+            </div>
+          </div>
+
+          <!-- STEP 4: LEADERBOARD MODAL (TOP 10 + TABS) -->
+          <div class="mg-modal-backdrop" id="mg-leaderboard-modal">
+            <div class="mg-modal-card" style="max-width: 560px;">
+              <button class="mg-modal-close" onclick="window.voiceBankGames.closeLeaderboard()"><i class="fas fa-times"></i></button>
+              <div class="mg-modal-header">
+                <h3><i class="fas fa-crown" style="color: #f59e0b;"></i> Bảng Xếp Hạng Top 10</h3>
+                <p>Danh sách các anh tài dẫn đầu kết quả thử thách phương ngữ Bắc Trung Bộ.</p>
+              </div>
+
+              <div class="mg-leaderboard-tabs">
+                <button class="btn-mg-tab active" data-tab="all" onclick="window.voiceBankGames.renderLeaderboard('all')">Tất cả thời gian</button>
+                <button class="btn-mg-tab" data-tab="week" onclick="window.voiceBankGames.renderLeaderboard('week')">Tuần này</button>
+              </div>
+
+              <div class="mg-lb-list" id="mg-lb-list">
+                <!-- Rendered dynamically -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Confetti Canvas -->
+          <canvas id="mg-confetti-canvas"></canvas>
 
         </div>
 
@@ -639,7 +746,10 @@
           <div class="admin-grid">
             
             <div class="admin-sidebar">
-              <div style="font-weight: 700; font-size: 13px; text-transform: uppercase; color: var(--text-muted);"><i class="fas fa-hourglass-half"></i> Hàng đợi kiểm duyệt</div>
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <div style="font-weight: 700; font-size: 13px; text-transform: uppercase; color: var(--text-muted);"><i class="fas fa-hourglass-half"></i> Hàng đợi kiểm duyệt</div>
+                <button class="btn btn-secondary" id="btn-refresh-admin" style="font-size: 11px; padding: 4px 10px; border-radius: 6px;"><i class="fas fa-sync-alt"></i> Làm mới danh sách</button>
+              </div>
               <div class="admin-list-container" id="admin-queue-list">
                 <!-- User contributed pending uploads loaded here -->
               </div>
@@ -1000,6 +1110,7 @@
   
   <!-- App Custom Scripts -->
   <script src="data.js"></script>
+  <script src="src/components/Minigames/MinigameEngine.js"></script>
   <script src="games.js"></script>
   <script src="app.js"></script>
 </body>

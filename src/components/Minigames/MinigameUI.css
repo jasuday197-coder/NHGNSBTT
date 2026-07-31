@@ -1,0 +1,1042 @@
+/* ==========================================================================
+   MINIGAMES SYSTEM - STYLESHEET (src/components/Minigames/MinigameUI.css)
+   Gamified, modern UI/UX for Ngân hàng Giọng nói Số Bắc Trung Bộ
+   ========================================================================== */
+
+:root {
+  --mg-sky-50: #f0f9ff;
+  --mg-sky-100: #e0f2fe;
+  --mg-sky-500: #0ea5e9;
+  --mg-sky-600: #0284c7;
+  --mg-sky-700: #0369a1;
+
+  --mg-emerald-50: #ecfdf5;
+  --mg-emerald-100: #d1fae5;
+  --mg-emerald-500: #10b981;
+  --mg-emerald-600: #059669;
+
+  --mg-amber-50: #fffbeb;
+  --mg-amber-100: #fef3c7;
+  --mg-amber-500: #f59e0b;
+  --mg-amber-600: #d97706;
+
+  --mg-rose-50: #fff1f2;
+  --mg-rose-100: #ffe4e6;
+  --mg-rose-500: #f43f5e;
+  --mg-rose-600: #e11d48;
+
+  --mg-purple-500: #8b5cf6;
+  --mg-purple-600: #7c3aed;
+
+  --mg-slate-800: #1e293b;
+  --mg-slate-900: #0f172a;
+}
+
+/* Base Wrapper Container */
+.minigame-wrapper {
+  font-family: 'Plus Jakarta Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  color: #1e293b;
+  max-width: 1050px;
+  margin: 0 auto;
+  padding: 16px 20px;
+}
+
+/* ==========================================
+   1. GAME HUB & CARDS
+   ========================================== */
+.mg-hub-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  padding: 24px 30px;
+  border-radius: 20px;
+  color: #ffffff;
+  box-shadow: 0 10px 25px -5px rgba(2, 132, 199, 0.3);
+}
+
+.mg-hub-header h2 {
+  margin: 0 0 6px 0;
+  font-size: 24px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mg-hub-header p {
+  margin: 0;
+  opacity: 0.9;
+  font-size: 14px;
+}
+
+.btn-mg-leaderboard {
+  background: #ffffff;
+  color: #0284c7;
+  border: none;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 10px 20px;
+  border-radius: 50px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-mg-leaderboard:hover {
+  transform: translateY(-2px);
+  background: #f8fafc;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  color: #0369a1;
+}
+
+/* 3 Cards Grid */
+.mg-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+}
+
+.mg-card {
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.mg-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+}
+
+.mg-card.card-g1::before { background: linear-gradient(90deg, #0ea5e9, #0284c7); }
+.mg-card.card-g2::before { background: linear-gradient(90deg, #10b981, #059669); }
+.mg-card.card-g3::before { background: linear-gradient(90deg, #f59e0b, #d97706); }
+
+.mg-card:hover {
+  transform: translateY(-6px);
+  border-color: transparent;
+  box-shadow: 0 16px 32px -8px rgba(15, 23, 42, 0.12);
+}
+
+.mg-card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 30px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  width: fit-content;
+}
+
+.card-g1 .mg-card-badge { background: #e0f2fe; color: #0284c7; }
+.card-g2 .mg-card-badge { background: #d1fae5; color: #059669; }
+.card-g3 .mg-card-badge { background: #fef3c7; color: #d97706; }
+
+.mg-card-icon {
+  font-size: 38px;
+  margin-bottom: 16px;
+}
+
+.card-g1 .mg-card-icon { color: #0284c7; }
+.card-g2 .mg-card-icon { color: #059669; }
+.card-g3 .mg-card-icon { color: #d97706; }
+
+.mg-card-title {
+  font-size: 20px;
+  font-weight: 800;
+  margin: 0 0 10px 0;
+  color: #0f172a;
+}
+
+.mg-card-desc {
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0 0 20px 0;
+}
+
+.mg-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.mg-high-score {
+  font-size: 13px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.mg-high-score span {
+  font-size: 15px;
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.btn-mg-play {
+  background: #0ea5e9;
+  color: #ffffff;
+  border: none;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 10px 22px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-g1 .btn-mg-play { background: #0284c7; }
+.card-g2 .btn-mg-play { background: #10b981; }
+.card-g3 .btn-mg-play { background: #f59e0b; }
+
+.btn-mg-play:hover {
+  filter: brightness(1.08);
+  transform: scale(1.04);
+}
+
+/* ==========================================
+   2. GAME ARENA (ACTIVE GAME PLAY AREA)
+   ========================================== */
+.mg-arena {
+  background: #ffffff;
+  border-radius: 24px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  padding: 28px;
+  display: none;
+  animation: popIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mg-arena.active {
+  display: block;
+}
+
+.mg-arena-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #f1f5f9;
+}
+
+.btn-mg-back {
+  background: #f1f5f9;
+  color: #475569;
+  border: none;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: 30px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.btn-mg-back:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.mg-arena-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+}
+
+.mg-arena-stats {
+  display: flex;
+  gap: 12px;
+}
+
+.mg-stat-pill {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mg-stat-pill.score { background: #e0f2fe; color: #0284c7; }
+.mg-stat-pill.wrong { background: #ffe4e6; color: #e11d48; }
+
+/* ==========================================
+   GAME 1: TRẮC NGHIỆM + TIMER + STREAK
+   ========================================== */
+.mg-g1-container {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* Timer progress bar */
+.mg-timer-track {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.mg-timer-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #10b981, #0ea5e9);
+  border-radius: 10px;
+  transition: width 0.1s linear, background-color 0.3s ease;
+}
+
+.mg-timer-fill.warning {
+  background: linear-gradient(90deg, #f59e0b, #ef4444) !important;
+}
+
+/* Streak Banner */
+.mg-streak-banner {
+  display: none;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #ffffff;
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 14px;
+  text-align: center;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+  animation: pulseGlow 1.2s infinite alternate;
+}
+
+.mg-streak-banner.active {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.mg-question-card {
+  background: #f8fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 28px;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.mg-word-tag {
+  display: inline-block;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+}
+
+.mg-target-word {
+  font-size: 32px;
+  font-weight: 900;
+  color: #0284c7;
+  margin: 4px 0 8px 0;
+  letter-spacing: -0.5px;
+}
+
+.mg-options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 640px) {
+  .mg-options-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.btn-mg-choice {
+  background: #ffffff;
+  border: 2px solid #cbd5e1;
+  color: #1e293b;
+  font-weight: 700;
+  font-size: 15px;
+  padding: 16px 20px;
+  border-radius: 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-mg-choice:hover:not(:disabled) {
+  border-color: #0284c7;
+  background: #f0f9ff;
+  color: #0284c7;
+  transform: translateY(-2px);
+}
+
+.btn-mg-choice.correct {
+  background: #d1fae5 !important;
+  border-color: #10b981 !important;
+  color: #047857 !important;
+}
+
+.btn-mg-choice.wrong {
+  background: #ffe4e6 !important;
+  border-color: #f43f5e !important;
+  color: #be123c !important;
+}
+
+.btn-mg-choice:disabled {
+  cursor: default;
+}
+
+/* Context Explanation Popup */
+.mg-explanation-box {
+  display: none;
+  background: #f0f9ff;
+  border: 2px solid #bae6fd;
+  border-radius: 16px;
+  padding: 20px;
+  margin-top: 20px;
+  animation: popIn 0.25s ease-out;
+}
+
+.mg-explanation-box.active {
+  display: block;
+}
+
+.mg-explanation-header {
+  font-weight: 800;
+  font-size: 15px;
+  color: #0369a1;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mg-explanation-body {
+  font-size: 14px;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.mg-explanation-example {
+  background: #ffffff;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border-left: 4px solid #0284c7;
+  font-style: italic;
+  margin-top: 10px;
+  color: #0f172a;
+}
+
+.btn-mg-next {
+  background: #0284c7;
+  color: #ffffff;
+  border: none;
+  font-weight: 800;
+  font-size: 15px;
+  padding: 12px 28px;
+  border-radius: 12px;
+  cursor: pointer;
+  margin-top: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.btn-mg-next:hover {
+  background: #0369a1;
+  transform: translateY(-2px);
+}
+
+/* ==========================================
+   GAME 2: GHÉP CẶP TỪ VỰNG
+   ========================================== */
+.mg-matching-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.mg-matching-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mg-col-header {
+  font-weight: 800;
+  font-size: 14px;
+  text-transform: uppercase;
+  color: #64748b;
+  text-align: center;
+  margin-bottom: 6px;
+  letter-spacing: 0.5px;
+}
+
+.mg-match-card {
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 16px 20px;
+  font-weight: 700;
+  font-size: 16px;
+  color: #1e293b;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+}
+
+.mg-match-card:hover:not(.matched) {
+  border-color: #10b981;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(16, 185, 129, 0.15);
+}
+
+.mg-match-card.selected {
+  border-color: #0284c7 !important;
+  background: #e0f2fe !important;
+  color: #0369a1 !important;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.25) !important;
+  transform: scale(1.02);
+}
+
+.mg-match-card.matched {
+  background: #d1fae5 !important;
+  border-color: #10b981 !important;
+  color: #047857 !important;
+  opacity: 0.35;
+  pointer-events: none;
+  transform: scale(0.96);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.mg-match-card.wrong {
+  background: #ffe4e6 !important;
+  border-color: #f43f5e !important;
+  color: #be123c !important;
+  animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+/* ==========================================
+   GAME 3: Ô CHỮ PHƯƠNG NGỮ
+   ========================================== */
+.mg-g3-container {
+  max-width: 680px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.mg-clue-box {
+  background: #fffbeb;
+  border: 2px dashed #f59e0b;
+  border-radius: 18px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+}
+
+.mg-clue-label {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #d97706;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.mg-clue-text {
+  font-size: 17px;
+  font-weight: 700;
+  color: #78350f;
+  line-height: 1.5;
+}
+
+.mg-word-slots {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 30px;
+  min-height: 64px;
+}
+
+.mg-letter-box {
+  width: 52px;
+  height: 58px;
+  border: 2px solid #cbd5e1;
+  border-radius: 12px;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 900;
+  color: #0f172a;
+  text-transform: uppercase;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.mg-letter-box.filled {
+  border-color: #f59e0b;
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.mg-letter-box.active {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.25);
+  transform: translateY(-3px);
+}
+
+.mg-letter-box.space {
+  border: none;
+  background: transparent;
+  width: 24px;
+  box-shadow: none;
+}
+
+.mg-letter-box.solved {
+  border-color: #10b981;
+  background: #d1fae5;
+  color: #047857;
+}
+
+.mg-letter-box.revealed {
+  border-color: #f43f5e;
+  background: #ffe4e6;
+  color: #be123c;
+}
+
+/* Player Badge in Hub Header */
+.mg-player-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  padding: 6px 14px;
+  border-radius: 30px;
+  font-size: 13px;
+  color: #ffffff;
+}
+
+.btn-mg-edit-name {
+  background: #ffffff;
+  color: #0284c7;
+  border: none;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+}
+
+.btn-mg-edit-name:hover {
+  background: #f0f9ff;
+  color: #0369a1;
+  transform: translateY(-1px);
+}
+
+.btn-mg-edit-name.highlight {
+  background: #f59e0b;
+  color: #ffffff;
+  font-size: 13px;
+  padding: 6px 14px;
+}
+
+.btn-mg-edit-name.highlight:hover {
+  background: #d97706;
+}
+
+/* Virtual On-Screen Keypad */
+.mg-virtual-keypad {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.mg-key-row {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+.btn-mg-key {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-weight: 700;
+  font-size: 15px;
+  color: #1e293b;
+  cursor: pointer;
+  min-width: 38px;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.btn-mg-key:hover:not(:disabled) {
+  background: #e2e8f0;
+  color: #0f172a;
+  transform: translateY(-1px);
+}
+
+.btn-mg-key:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-mg-key.wide {
+  padding: 10px 18px;
+  background: #e2e8f0;
+  font-size: 13px;
+}
+
+.btn-mg-key.btn-reveal-cw {
+  background: #ef4444;
+  color: #ffffff;
+  border-color: #dc2626;
+}
+
+.btn-mg-key.btn-reveal-cw:hover:not(:disabled) {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.btn-mg-key.btn-submit-cw {
+  background: #f59e0b;
+  color: #ffffff;
+  border-color: #d97706;
+}
+
+.btn-mg-key.btn-submit-cw:hover:not(:disabled) {
+  background: #d97706;
+  color: #ffffff;
+}
+
+/* ==========================================
+   3. MODAL DIALOGS (NON-BLOCKING SAFETY)
+   ========================================== */
+.mg-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 99999;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(5px);
+  /* CRITICAL SAFETY RULES TO PREVENT PAGE FREEZE */
+  display: none !important;
+  pointer-events: none !important;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.mg-modal-backdrop.active {
+  display: flex !important;
+  pointer-events: auto !important;
+  opacity: 1;
+  align-items: center;
+  justify-content: center;
+}
+
+.mg-modal-card {
+  background: #ffffff;
+  border-radius: 24px;
+  width: 90%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+  padding: 30px;
+  position: relative;
+  animation: popIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mg-modal-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.mg-modal-header h3 {
+  margin: 0 0 6px 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.mg-modal-header p {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.mg-modal-close {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  background: #f1f5f9;
+  border: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  font-size: 16px;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.mg-modal-close:hover {
+  background: #ffe4e6;
+  color: #e11d48;
+}
+
+/* Start Modal Form */
+.mg-nickname-input {
+  width: 100%;
+  padding: 14px 18px;
+  border: 2px solid #cbd5e1;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 16px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease;
+}
+
+.mg-nickname-input:focus {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.2);
+}
+
+.mg-welcome-banner {
+  background: #e0f2fe;
+  color: #0369a1;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.btn-mg-submit-start {
+  width: 100%;
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  color: #ffffff;
+  border: none;
+  padding: 14px;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+}
+
+.btn-mg-submit-start:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(2, 132, 199, 0.4);
+}
+
+/* Results Dialog */
+.mg-result-badge {
+  font-size: 48px;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.mg-result-scores {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin: 20px 0;
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+}
+
+.mg-score-box {
+  text-align: center;
+}
+
+.mg-score-val {
+  font-size: 22px;
+  font-weight: 900;
+  color: #0284c7;
+  display: block;
+}
+
+.mg-score-lbl {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+/* Leaderboard Modal */
+.mg-leaderboard-tabs {
+  display: flex;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 12px;
+  margin-bottom: 18px;
+}
+
+.btn-mg-tab {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  background: transparent;
+  font-weight: 700;
+  font-size: 14px;
+  color: #64748b;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-mg-tab.active {
+  background: #ffffff;
+  color: #0284c7;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.mg-lb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mg-lb-row {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  transition: all 0.15s ease;
+}
+
+.mg-lb-row.top-1 { background: #fefce8; border-color: #fde047; }
+.mg-lb-row.top-2 { background: #f8fafc; border-color: #cbd5e1; }
+.mg-lb-row.top-3 { background: #fff7ed; border-color: #fdba74; }
+
+.mg-lb-rank {
+  font-size: 18px;
+  font-weight: 900;
+  width: 36px;
+  text-align: center;
+}
+
+.mg-lb-info {
+  flex: 1;
+  margin-left: 12px;
+}
+
+.mg-lb-name {
+  font-weight: 800;
+  font-size: 15px;
+  color: #0f172a;
+}
+
+.mg-lb-sub {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.mg-lb-score {
+  font-weight: 900;
+  font-size: 16px;
+  color: #0284c7;
+  text-align: right;
+}
+
+/* Confetti Canvas overlay */
+#mg-confetti-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 100000;
+}
+
+/* KEYFRAMES ANIMATIONS */
+@keyframes shake {
+  10%, 90% { transform: translate3d(-2px, 0, 0); }
+  20%, 80% { transform: translate3d(4px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+  40%, 60% { transform: translate3d(6px, 0, 0); }
+}
+
+@keyframes pulseGlow {
+  0% { transform: scale(1); box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4); }
+  100% { transform: scale(1.02); box-shadow: 0 6px 22px rgba(245, 158, 11, 0.7); }
+}
+
+@keyframes popIn {
+  0% { transform: scale(0.92); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
