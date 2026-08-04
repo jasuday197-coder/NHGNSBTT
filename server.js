@@ -273,37 +273,43 @@ function readPostBody(req) {
   });
 }
 
-// Google AI Studio (Gemini) HTTPS Client Helper with Multi-Model Fallback
-function callGeminiAPI(apiKey, prompt, forceJson) {
-  const models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
+// OpenRouter HTTPS Client Helper with Multi-Model Fallback (Free & High Availability Models)
+function callOpenRouterAPI(apiKey, messages, forceJson = false) {
+  const models = [
+    'openrouter/free',
+    'google/gemma-2-9b-it:free'
+  ];
 
   function tryModel(modelIndex) {
     if (modelIndex >= models.length) {
-      return Promise.reject(new Error('All Gemini API models failed'));
+      return Promise.reject(new Error('All OpenRouter API models failed'));
     }
 
     const modelName = models[modelIndex];
 
     return new Promise((resolve, reject) => {
-      const payload = JSON.stringify({
-        contents: [{
-          parts: [{ text: prompt }]
-        }],
-        generationConfig: forceJson ? {
-          responseMimeType: "application/json"
-        } : undefined
-      });
+      const payloadObj = {
+        model: modelName,
+        messages: messages
+      };
+      if (forceJson) {
+        payloadObj.response_format = { type: "json_object" };
+      }
+      const payload = JSON.stringify(payloadObj);
 
       const options = {
-        hostname: 'generativelanguage.googleapis.com',
+        hostname: 'openrouter.ai',
         port: 443,
-        path: `/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+        path: '/api/v1/chat/completions',
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://nganhanggiongnoiso.vn',
+          'X-Title': 'Ngan Hang Giong Noi So',
           'Content-Length': Buffer.byteLength(payload)
         },
-        timeout: 12000
+        timeout: 25000
       };
 
       const req = https.request(options, (res) => {
@@ -313,27 +319,53 @@ function callGeminiAPI(apiKey, prompt, forceJson) {
         });
         res.on('end', () => {
           if (res.statusCode >= 200 && res.statusCode < 300) {
-            resolve(data);
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices && parsed.choices[0] && parsed.choices[0].message && parsed.choices[0].message.content;
+              if (content) {
+                resolve(content);
+              } else {
+                console.warn(`[OpenRouter API Warning] Model ${modelName} returned unexpected structure: ${data}`);
+                if (modelIndex + 1 < models.length) {
+                  tryModel(modelIndex + 1).then(resolve).catch(reject);
+                } else {
+                  reject(new Error('Invalid OpenRouter response structure'));
+                }
+              }
+            } catch (err) {
+              reject(err);
+            }
           } else {
-            console.warn(`[Gemini API Warning] Model ${modelName} returned status ${res.statusCode}: ${data}`);
-            if ((res.statusCode === 404 || res.statusCode === 400) && modelIndex + 1 < models.length) {
-              console.log(`[Gemini API Retrying] Trying next model fallback ${models[modelIndex + 1]}...`);
+            console.warn(`[OpenRouter API Warning] Model ${modelName} returned status ${res.statusCode}: ${data}`);
+            if (modelIndex + 1 < models.length) {
+              console.log(`[OpenRouter API Retrying] Model ${modelName} failed (${res.statusCode}). Trying fallback ${models[modelIndex + 1]}...`);
               tryModel(modelIndex + 1).then(resolve).catch(reject);
             } else {
-              reject(new Error(`API returned status ${res.statusCode}: ${data}`));
+              reject(new Error(`OpenRouter API returned status ${res.statusCode}: ${data}`));
             }
           }
         });
       });
 
       req.on('error', (e) => {
-        console.error(`[Gemini API HTTPS Error] ${e.message}`);
-        reject(e);
+        console.error(`[OpenRouter API HTTPS Error on ${modelName}] ${e.message}`);
+        if (modelIndex + 1 < models.length) {
+          console.log(`[OpenRouter API Retrying] Model ${modelName} error. Trying fallback ${models[modelIndex + 1]}...`);
+          tryModel(modelIndex + 1).then(resolve).catch(reject);
+        } else {
+          reject(e);
+        }
       });
 
       req.on('timeout', () => {
         req.destroy();
-        reject(new Error(`API request timed out on model ${modelName}`));
+        console.warn(`[OpenRouter API Timeout] Request timed out on model ${modelName}`);
+        if (modelIndex + 1 < models.length) {
+          console.log(`[OpenRouter API Retrying] Model ${modelName} timed out. Trying fallback ${models[modelIndex + 1]}...`);
+          tryModel(modelIndex + 1).then(resolve).catch(reject);
+        } else {
+          reject(new Error(`API request timed out on model ${modelName}`));
+        }
       });
 
       req.write(payload);
@@ -362,11 +394,11 @@ const server = http.createServer((req, res) => {
       }
 
       try {
-        const apiKey = process.env.GEMINI_API_KEY;
-        const hasApiKey = apiKey && apiKey !== 'YOUR_GEMINI_API_KEY_HERE';
+        const apiKey = process.env.OPENROUTER_API_KEY;
+        const hasApiKey = apiKey && apiKey !== 'YOUR_OPENROUTER_API_KEY_HERE';
 
         if (!hasApiKey) {
-          console.log('[Gemini Translation API] GEMINI_API_KEY is not configured or is placeholder. Using smart RAG offline fallback.');
+          console.log('[OpenRouter Translation API] OPENROUTER_API_KEY is not configured or is placeholder. Using smart RAG offline fallback.');
           const fallbackResult = fallbackTranslate(text, direction, 'unconfigured_key');
           res.statusCode = 200;
           res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -379,8 +411,9 @@ const server = http.createServer((req, res) => {
           `${idx + 1}. Từ địa phương: "${item.word}" <-> Nghĩa phổ thông tương ứng: "${item.meaning}" (Vùng: ${item.region || 'Bắc Trung Bộ'}) | Giải thích: ${item.culturalInsight || item.example || 'Từ điển phương ngữ chuẩn'}`
         ).join('\n');
 
-        const prompt = `Bạn là Chuyên gia Ngôn ngữ học kiêm Mô hình AI Dịch thuật Phương ngữ Việt Nam đỉnh cao.
-Hãy dịch câu dưới đây giữa Tiếng Việt Phổ Thông và Phương ngữ Địa phương (Bắc Trung Bộ, Nam Bộ, v.v.), đảm bảo giữ nguyên sắc thái biểu cảm, đại từ xưng hô, và ngữ cảnh tự nhiên nhất.
+        const systemMessage = `Bạn là Trợ lý Văn hóa Thổ âm Sông núi kiêm Mô hình AI Dịch thuật Phương ngữ Việt Nam đỉnh cao (đặc biệt là 6 tỉnh Bắc Trung Bộ: Thanh Hóa, Nghệ An, Hà Tĩnh, Quảng Bình, Quảng Trị, Thừa Thiên Huế).`;
+
+        const userPrompt = `Hãy dịch câu dưới đây giữa Tiếng Việt Phổ Thông và Phương ngữ Địa phương (Bắc Trung Bộ, Nam Bộ, v.v.), đảm bảo giữ nguyên sắc thái biểu cảm, đại từ xưng hô, và ngữ cảnh tự nhiên nhất.
 
 Thông tin câu cần dịch:
 - Câu gốc: "${text}"
@@ -404,11 +437,15 @@ YÊU CẦU BẮT BUỘC KHI DỊCH:
   ]
 }`;
 
-        const responseText = await callGeminiAPI(apiKey, prompt, true);
-        const parsedResponse = JSON.parse(responseText);
-        let rawText = parsedResponse.candidates[0].content.parts[0].text.trim();
+        const messages = [
+          { role: 'system', content: systemMessage },
+          { role: 'user', content: userPrompt }
+        ];
+
+        let rawText = await callOpenRouterAPI(apiKey, messages, true);
+        rawText = rawText.trim();
         
-        // Strip markdown code block wrappers if Gemini outputs them
+        // Strip markdown code block wrappers if model outputs them
         if (rawText.startsWith('```')) {
           rawText = rawText.replace(/^```(json)?\s*/i, '').replace(/\s*```$/, '').trim();
         }
@@ -417,7 +454,7 @@ YÊU CẦU BẮT BUỘC KHI DỊCH:
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.end(rawText);
       } catch (err) {
-        console.error("Gemini Translation API failed, falling back offline:", err.message);
+        console.error("OpenRouter Translation API failed, falling back offline:", err.message);
         const fallbackResult = fallbackTranslate(text, direction, 'network_error');
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -439,8 +476,8 @@ YÊU CẦU BẮT BUỘC KHI DỊCH:
       }
 
       const cleanMessage = message.trim();
-      const apiKey = process.env.GEMINI_API_KEY;
-      const hasApiKey = apiKey && apiKey !== 'YOUR_GEMINI_API_KEY_HERE';
+      const apiKey = process.env.OPENROUTER_API_KEY;
+      const hasApiKey = apiKey && apiKey !== 'YOUR_OPENROUTER_API_KEY_HERE';
 
       const quickRepliesFallback = {
         '"Răng" nghĩa là gì? Cho ví dụ thực tế cách dùng.': `**"Răng"** có nghĩa là **"sao, tại sao, thế nào"** trong tiếng phổ thông.
@@ -469,27 +506,29 @@ Khi kết hợp chúng lại tạo nên ngữ điệu nhịp nhàng, trầm bổ
 
       try {
         if (!hasApiKey) {
-          throw new Error('Gemini API key is not configured');
+          throw new Error('OPENROUTER_API_KEY is not configured');
         }
 
         const RAG = retrieveContext(cleanMessage);
         const contextBlock = RAG.khoA.map(item => `- Từ địa phương: "${item.word}" -> Nghĩa: "${item.meaning}" (Ví dụ: "${item.example}" dịch là "${item.exampleTranslation}", giải nghĩa: "${item.culturalInsight}")`).join('\n');
 
-        const systemInstruction = `Bạn là một nhà Ngôn ngữ học kiêm Chuyên gia Văn hóa Dân gian Bắc Trung Bộ. Hãy giải thích từ vựng, ngữ pháp, và phong tục văn hóa dựa vào Context được cung cấp từ kho dữ liệu. Phải luôn kèm theo ví dụ thực tế bằng tiếng địa phương và dịch nghĩa sang tiếng Việt phổ thông.
+        const systemMessage = `Bạn là Trợ lý Văn hóa Thổ âm Sông núi – nhà Ngôn ngữ học kiêm Chuyên gia Văn hóa Dân gian 6 tỉnh Bắc Trung Bộ (Thanh Hóa, Nghệ An, Hà Tĩnh, Quảng Bình, Quảng Trị, Thừa Thiên Huế). Hãy giải thích từ vựng, ngữ pháp, và phong tục văn hóa dựa vào Context được cung cấp từ kho dữ liệu. Phải luôn kèm theo ví dụ thực tế bằng tiếng địa phương và dịch nghĩa sang tiếng Việt phổ thông.
 
 Dưới đây là một số thông tin tham chiếu từ cơ sở dữ liệu (Context RAG):
-${contextBlock || '(Không có thông tin liên quan trực tiếp trong cơ sở dữ liệu. Hãy sử dụng kiến thức chuyên môn của bạn về văn hóa Bắc Trung Bộ để giải thích)'}`;
+${contextBlock || '(Không có thông tin liên quan trực tiếp trong cơ sở dữ liệu. Hãy sử dụng kiến thức chuyên môn của bạn về văn hóa 6 tỉnh Bắc Trung Bộ để giải thích)'}`;
 
-        const prompt = `${systemInstruction}\n\nCâu hỏi của người dùng: "${cleanMessage}"`;
-        const responseText = await callGeminiAPI(apiKey, prompt, false);
-        const parsedResponse = JSON.parse(responseText);
-        const textResult = parsedResponse.candidates[0].content.parts[0].text;
+        const messages = [
+          { role: 'system', content: systemMessage },
+          { role: 'user', content: cleanMessage }
+        ];
+
+        const textResult = await callOpenRouterAPI(apiKey, messages, false);
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.end(JSON.stringify({ response: textResult }));
       } catch (err) {
-        console.error("Gemini Chatbot API failed, falling back offline:", err);
+        console.error("OpenRouter Chatbot API failed, falling back offline:", err.message || err);
         
         if (quickRepliesFallback[cleanMessage]) {
           res.statusCode = 200;
