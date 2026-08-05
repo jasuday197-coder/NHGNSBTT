@@ -188,9 +188,9 @@
                   <button id="btn-zoom-reset" class="btn btn-secondary" style="padding: 0; font-size: 12px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-weight: bold; background: var(--bg-surface-solid); border: 1px solid var(--border-color); color: var(--text-main);" title="Đặt lại góc nhìn"><i class="fas fa-undo"></i></button>
                 </div>
                 
-                <!-- Floating Contribution Button (+) inside Map Container -->
-                <button class="fab-contrib" id="open-contribute-fab" title="Đóng góp ghi âm giọng nói của bạn">
-                  <i class="fas fa-plus"></i>
+                <!-- Top-Right Edge Map Contribution Button -->
+                <button class="fab-contrib open-contrib-btn" id="open-contribute-fab" title="Đóng góp bản ghi âm phương ngữ của bạn">
+                  <i class="fas fa-microphone-alt"></i><span>Đăng tải Ghi âm</span>
                 </button>
 
                 <!-- Province Center Spotlight Pop-up Card -->
@@ -763,47 +763,63 @@
               </div>
 
               <div id="admin-detail-content" style="display: none; flex-direction: column; height: 100%;">
-                <div class="admin-detail-header">
+                <div class="admin-detail-header" style="align-items: center; justify-content: space-between;">
                   <div class="admin-detail-title">
                     <h3 id="admin-detail-title-txt">Ghi âm đóng góp</h3>
-                    <p id="admin-detail-speaker">Người nói: Nguyễn Văn A | Tỉnh: Nghệ An</p>
+                    <p id="admin-detail-speaker">Người đóng góp: - | Tỉnh: -</p>
                   </div>
                   
-                  <button class="btn btn-primary" id="admin-play-btn" style="border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 16px;">
-                    <i class="fas fa-play"></i>
-                  </button>
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <button class="btn btn-primary" id="admin-play-btn" style="border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 16px;">
+                      <i class="fas fa-play"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Integrated Audio Player Control -->
+                <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; margin-bottom: 20px;">
+                  <div style="font-size: 12px; font-weight: 700; color: var(--color-primary); margin-bottom: 8px;">
+                    <i class="fas fa-volume-up"></i> Trình phát âm thanh kiểm duyệt (Audio Player)
+                  </div>
+                  <audio id="admin-audio-player" controls style="width: 100%; height: 40px; border-radius: 8px;"></audio>
                 </div>
 
                 <div class="admin-section-grid">
                   <div class="admin-card-panel">
-                    <h4 class="dict-section-title">Nhãn dự đoán từ AI Pipeline</h4>
+                    <h4 class="dict-section-title"><i class="fas fa-robot"></i> Kết quả phân tích AI Pipeline</h4>
                     <div class="admin-ai-badge-row" id="admin-ai-tags-row">
                       <!-- AI Pilled tags -->
                     </div>
                   </div>
                   <div class="admin-card-panel" style="background: rgba(255, 255, 255, 0.01);">
-                    <h4 class="dict-section-title">Hướng dẫn của Admin</h4>
-                    <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5;">Hãy lắng nghe kỹ đoạn âm thanh. Nếu phát hiện từ ngữ xúc phạm hoặc tiếng ồn quá lớn phá hỏng tệp ghi âm, vui lòng thực hiện Xóa bỏ. Nếu tệp tốt, bấm Duyệt.</p>
+                    <h4 class="dict-section-title"><i class="fas fa-shield-alt"></i> Quy tắc kiểm duyệt</h4>
+                    <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5;">Lắng nghe kỹ chất lượng thu âm. Nếu âm thanh chứa ngôn từ không phù hợp hoặc bị nhiễu quá nặng, hãy bấm <strong>Từ chối</strong>. Nếu hợp lệ, bấm <strong>Duyệt</strong> để chuyển vào CSDL chính.</p>
                   </div>
                 </div>
 
-                <div class="admin-card-panel" style="margin-bottom: 24px;">
-                  <h4 class="dict-section-title">Dự đoán văn bản STT</h4>
-                  <div class="transcript-box" style="background: rgba(0,0,0,0.15); margin-top: 8px;">
-                    <div class="transcript-line">
-                      <span class="transcript-label">Mô tả giọng gốc:</span>
-                      <span class="transcript-text" id="admin-trans-dialect">-</span>
+                <!-- Subtitle Box (Editable for Admin) -->
+                <div class="admin-card-panel" style="margin-bottom: 24px; background: rgba(15, 23, 42, 0.4); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h4 class="dict-section-title" style="color: #38bdf8; margin: 0;"><i class="fas fa-closed-captioning"></i> Phụ đề song ngữ (Subtitles)</h4>
+                    <span style="font-size: 11px; color: #10b981; font-weight: 600; background: rgba(16, 185, 129, 0.15); padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.3);"><i class="fas fa-edit"></i> Admin nhấp vào ô để chỉnh sửa trực tiếp</span>
+                  </div>
+                  
+                  <div class="transcript-box" style="background: rgba(0,0,0,0.25); border-radius: 10px; padding: 14px;">
+                    <div class="transcript-line" style="margin-bottom: 14px;">
+                      <label for="admin-trans-dialect" style="font-weight: 700; color: #fbbf24; display: block; font-size: 12px; text-transform: uppercase; margin-bottom: 6px;">🗣 Sub giọng địa phương (Whisper STT AI - Có thể sửa):</label>
+                      <textarea class="form-control" id="admin-trans-dialect" rows="2" style="width: 100%; background: rgba(15, 23, 42, 0.9); color: #ffffff; border: 1px solid rgba(251, 191, 36, 0.4); border-radius: 8px; padding: 8px 12px; font-size: 14px; font-style: italic; resize: vertical;" placeholder="Nhập hoặc chỉnh sửa phụ đề giọng địa phương..."></textarea>
                     </div>
-                    <div class="transcript-line standard">
-                      <span class="transcript-label">Dịch chuẩn hóa:</span>
-                      <span class="transcript-text" id="admin-trans-standard">-</span>
+                    <div class="transcript-line standard" style="border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 12px;">
+                      <label for="admin-trans-standard" style="font-weight: 700; color: #34d399; display: block; font-size: 12px; text-transform: uppercase; margin-bottom: 6px;">🌐 Sub dịch Tiếng Phổ thông (RAG Dictionary - Có thể sửa):</label>
+                      <textarea class="form-control" id="admin-trans-standard" rows="2" style="width: 100%; background: rgba(15, 23, 42, 0.9); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.4); border-radius: 8px; padding: 8px 12px; font-size: 14px; font-weight: 500; resize: vertical;" placeholder="Nhập hoặc chỉnh sửa phụ đề dịch tiếng phổ thông..."></textarea>
                     </div>
                   </div>
                 </div>
 
-                <div class="admin-actions-row">
-                  <button class="btn btn-secondary" id="admin-btn-delete" style="color: var(--color-danger); border-color: rgba(239, 68, 68, 0.3);"><i class="fas fa-trash-alt"></i> Xóa bỏ</button>
-                  <button class="btn btn-primary" id="admin-btn-approve" style="background: var(--color-success); color: #fff; box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);"><i class="fas fa-check"></i> Duyệt Đăng tải</button>
+                <!-- Admin Action Buttons -->
+                <div class="admin-actions-row" style="display: flex; gap: 14px; justify-content: flex-end;">
+                  <button class="btn btn-secondary" id="admin-btn-reject" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.08); font-weight: 600; padding: 10px 20px;"><i class="fas fa-times-circle"></i> Từ chối</button>
+                  <button class="btn btn-primary" id="admin-btn-approve" style="background: #10b981; color: #fff; border-color: #10b981; box-shadow: 0 0 12px rgba(16, 185, 129, 0.35); font-weight: 700; padding: 10px 24px;"><i class="fas fa-check-circle"></i> Duyệt (Chuyển CSDL chính)</button>
                 </div>
               </div>
             </div>
@@ -819,28 +835,43 @@
   <!-- MODAL: ADD RECORD / CONTRIBUTE FLOW -->
   <!-- ========================================== -->
   <div class="modal-overlay" id="contribution-modal">
-    <div class="modal-card">
+    <div class="modal-card" style="max-width: 650px;">
       <div class="modal-header">
-        <h3><i class="fas fa-microphone-alt"></i> Đóng góp giọng nói của bạn</h3>
+        <h3><i class="fas fa-microphone-alt" style="color: var(--color-primary);"></i> Đăng Tải Bản Ghi Âm Phương Ngữ Mới</h3>
         <button class="close-modal" id="close-modal-btn">&times;</button>
       </div>
       <div class="modal-body">
         <form id="contrib-form" onsubmit="return false;">
           
           <div class="form-group">
-            <label for="contrib-title">Tên/Tiêu đề đoạn ghi âm *</label>
-            <input type="text" class="form-control" id="contrib-title" placeholder="Ví dụ: Lời chào tiếng Huế, Sự tích làng bè..." required />
+            <label for="contrib-title">Tên/Tiêu đề bản ghi âm *</label>
+            <input type="text" class="form-control" id="contrib-title" placeholder="Ví dụ: Giọng hò xứ Nghệ, Câu chuyện làng chài..." required />
+          </div>
+
+          <div class="form-row">
+            <div class="form-group" style="flex: 2;">
+              <label for="contrib-speaker">Tên người đóng góp *</label>
+              <div style="display: flex; gap: 10px; align-items: center;">
+                <input type="text" class="form-control" id="contrib-speaker" placeholder="Nhập tên người nói" required style="flex: 1;" />
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; white-space: nowrap; margin-bottom: 0;">
+                  <input type="checkbox" id="contrib-anonymous" /> Ẩn danh
+                </label>
+              </div>
+            </div>
+            <div class="form-group" style="flex: 1;">
+              <label for="contrib-gender">Giới tính *</label>
+              <select class="form-control" id="contrib-gender" required style="background-color:#0f1726; color:white;">
+                <option value="Nam">Nam</option>
+                <option value="Nữ">Nữ</option>
+              </select>
+            </div>
           </div>
 
           <div class="form-row">
             <div class="form-group">
-              <label for="contrib-speaker">Tên người nói *</label>
-              <input type="text" class="form-control" id="contrib-speaker" placeholder="Nhập tên hoặc ẩn danh" required />
-            </div>
-            <div class="form-group">
-              <label for="contrib-province">Vùng / Tỉnh *</label>
+              <label for="contrib-province">Vùng / Tỉnh thành *</label>
               <select class="form-control" id="contrib-province" required style="background-color:#0f1726; color:white;">
-                <option value="" disabled selected>Chọn Tỉnh thành</option>
+                <option value="" disabled selected>Chọn 1 trong 6 tỉnh</option>
                 <option value="Thanh Hóa">Thanh Hóa</option>
                 <option value="Nghệ An">Nghệ An</option>
                 <option value="Hà Tĩnh">Hà Tĩnh</option>
@@ -849,66 +880,76 @@
                 <option value="Thừa Thiên Huế">Thừa Thiên Huế</option>
               </select>
             </div>
-          </div>
-
-          <div class="form-row">
             <div class="form-group">
-              <label for="contrib-age">Nhóm tuổi (Self-report) *</label>
+              <label for="contrib-age">Nhóm tuổi *</label>
               <select class="form-control" id="contrib-age" required style="background-color:#0f1726; color:white;">
-                <option value="" disabled selected>Chọn tuổi</option>
+                <option value="" disabled selected>Chọn nhóm tuổi</option>
+                <option value="<18">&lt;18 tuổi</option>
                 <option value="18-35">18-35 tuổi</option>
                 <option value="36-55">36-55 tuổi</option>
                 <option value="56-70">56-70 tuổi</option>
-                <option value="71+">Trên 70 tuổi</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="contrib-gender">Giới tính</label>
-              <select class="form-control" id="contrib-gender" style="background-color:#0f1726; color:white;">
-                <option value="Nam">Nam</option>
-                <option value="Nữ">Nữ</option>
-                <option value="Khác">Khác</option>
+                <option value=">70">&gt;70 tuổi</option>
               </select>
             </div>
           </div>
 
           <div class="form-group">
-            <label for="contrib-topic">Chủ đề ghi âm *</label>
+            <label for="contrib-topic">Chủ đề nội dung *</label>
             <select class="form-control" id="contrib-topic" required style="background-color:#0f1726; color:white;">
-              <option value="Lịch sử & Văn hóa">Lịch sử & Văn hóa (Chuyện cổ, địa danh...)</option>
-              <option value="Giọng ca đặc trưng (Ví Giặm, Ca Huế...)">Giọng ca đặc trưng (Ví, Giặm, ca Huế, hò...)</option>
-              <option value="Tổng quan vùng (Địa lý, Đời sống...)">Tổng quan vùng (Kể chuyện thường nhật, sinh hoạt...)</option>
+              <option value="Lịch sử văn hóa">Lịch sử văn hóa (Truyền thuyết, câu chuyện cổ, di tích...)</option>
+              <option value="Giọng ca đặc trưng">Giọng ca đặc trưng (Ví, Giặm, Ca Huế, hò sông nước...)</option>
+              <option value="Tổng quan vùng">Tổng quan vùng (Đời sống sinh hoạt, phong tục, thói quen...)</option>
             </select>
           </div>
 
-          <!-- Điều khoản đồng ý phi thương mại -->
-          <label class="consent-checkbox">
-            <input type="checkbox" id="contrib-consent" required />
-            <span>Tôi đồng ý cung cấp giọng nói của mình cho dự án phi thương mại "Ngân hàng Giọng nói Số Bắc Trung Bộ" với mục đích nghiên cứu học thuật và bảo tồn văn hóa. *</span>
-          </label>
-
-          <!-- Microphone Recording Control area -->
-          <div class="record-btn-container">
-            <div class="mic-circle" id="mic-trigger-btn">
-              <i class="fas fa-microphone"></i>
+          <!-- AUDIO RECORD / FILE UPLOAD CONTAINER -->
+          <div style="background: rgba(15, 23, 42, 0.7); border: 1px dashed var(--border-color); border-radius: 12px; padding: 16px; margin: 16px 0; text-align: center;">
+            <div style="font-weight: 700; font-size: 13px; color: var(--color-primary); margin-bottom: 12px;">
+              <i class="fas fa-music"></i> CHỌN PHƯƠNG THỨC NỘP BẢN GHI ÂM (Micro trực tiếp HOẶC Tải tệp)
             </div>
-            <span class="record-status-text" id="record-status">Chưa ghi âm</span>
-            <strong style="font-size: 13px; color: #ffffff;" id="record-time-text">00:00 (Nhấn mic để bắt đầu thu âm)</strong>
-            
-            <div style="font-size: 12px; color: #ffffff; margin: 8px 0;">HOẶC</div>
-            
-            <!-- Fallback Upload tệp -->
-            <label for="contrib-file" class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px;">
-              <i class="fas fa-upload"></i> Tải lên tệp âm thanh sẵn có (.mp3, .wav)
-            </label>
-            <input type="file" id="contrib-file" accept="audio/*, .mp3, .wav, .m4a, .ogg, .aac, .flac" style="display: none;" />
+
+            <div style="display: flex; justify-content: center; gap: 20px; align-items: center; flex-wrap: wrap;">
+              <!-- Option 1: Mic Direct Recording -->
+              <div style="flex: 1; min-width: 220px; background: rgba(255,255,255,0.02); padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                <div style="font-size: 12px; font-weight: 600; color: #9ca3af; margin-bottom: 8px;">Ghi âm trực tiếp từ Micro</div>
+                <div class="mic-circle" id="mic-trigger-btn" style="margin: 0 auto 8px auto; cursor: pointer;">
+                  <i class="fas fa-microphone"></i>
+                </div>
+                <div class="record-status-text" id="record-status" style="font-size: 12px;">Chưa ghi âm</div>
+                <strong style="font-size: 13px; color: #ffffff;" id="record-time-text">00:00</strong>
+              </div>
+
+              <div style="font-size: 12px; font-weight: 700; color: #6b7280;">HOẶC</div>
+
+              <!-- Option 2: Upload audio file -->
+              <div style="flex: 1; min-width: 220px; background: rgba(255,255,255,0.02); padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                <div style="font-size: 12px; font-weight: 600; color: #9ca3af; margin-bottom: 12px;">Tải file âm thanh từ máy</div>
+                <label for="contrib-file" class="btn btn-secondary" style="font-size: 12px; padding: 8px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                  <i class="fas fa-upload"></i> Chọn file (.mp3, .wav, .m4a)
+                </label>
+                <input type="file" id="contrib-file" accept="audio/*, .mp3, .wav, .m4a" style="display: none;" />
+                <div id="file-selected-name" style="font-size: 11px; color: #38bdf8; margin-top: 8px; font-style: italic; word-break: break-all;">Chưa chọn tệp</div>
+              </div>
+            </div>
+
+            <!-- Audio Preview element -->
+            <div id="contrib-audio-preview-box" style="display: none; margin-top: 14px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;">
+              <div style="font-size: 11px; color: #10b981; margin-bottom: 6px;"><i class="fas fa-check-circle"></i> Đã sẵn sàng bản ghi âm:</div>
+              <audio id="contrib-audio-preview" controls style="width: 100%; height: 36px;"></audio>
+            </div>
           </div>
+
+          <!-- Non-commercial Copyright Commitment Checkbox -->
+          <label class="consent-checkbox" style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer; margin-top: 14px;">
+            <input type="checkbox" id="contrib-consent" required style="margin-top: 3px;" />
+            <span style="font-size: 12px; color: var(--text-muted); line-height: 1.5;">Tôi xin cam kết bản quyền đoạn ghi âm này thuộc quyền sở hữu cá nhân hoặc được sự cho phép hợp pháp, đồng ý cung cấp cho dự án phi thương mại "Ngân hàng Giọng nói Số Bắc Trung Bộ" vì mục đích bảo tồn văn hóa và nghiên cứu. *</span>
+          </label>
 
         </form>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" id="btn-cancel-contrib">Hủy bỏ</button>
-        <button class="btn btn-primary" id="btn-submit-contrib" disabled>Gửi bản ghi âm</button>
+        <button class="btn btn-primary" id="btn-submit-contrib">Đăng tải bài ghi âm</button>
       </div>
     </div>
   </div>
@@ -917,35 +958,43 @@
   <!-- MODAL: AI PROCESSING PIPELINE LOADER -->
   <!-- ========================================== -->
   <div class="modal-overlay" id="ai-pipeline-modal" style="z-index: 101;">
-    <div class="modal-card" style="width: 450px;">
-      <div class="modal-header">
-        <h3>Pipeline xử lý AI Tự động</h3>
+    <div class="modal-card" style="width: 480px; text-align: center; background: #0f172a; border-radius: 16px; border: 1px solid var(--border-color);">
+      <div class="modal-header" style="justify-content: center;">
+        <h3 style="font-size: 17px;"><i class="fas fa-brain" style="color: #0ea5e9;"></i> AI Analyzing Audio Stream</h3>
       </div>
-      <div class="modal-body">
+      <div class="modal-body" style="padding: 24px 20px;">
         <div class="ai-loader-container">
-          <div class="ai-pulse-graphic">
-            <div class="ai-circle-ring"></div>
-            <i class="fas fa-brain"></i>
+          
+          <!-- Waveform Animation Display -->
+          <div class="sound-wave-box" style="display: flex; align-items: center; justify-content: center; gap: 5px; height: 50px; margin-bottom: 20px;">
+            <span class="wave-bar"></span>
+            <span class="wave-bar"></span>
+            <span class="wave-bar"></span>
+            <span class="wave-bar"></span>
+            <span class="wave-bar"></span>
+            <span class="wave-bar"></span>
+            <span class="wave-bar"></span>
+            <span class="wave-bar"></span>
           </div>
+
+          <strong style="font-size: 15px; color: #ffffff; display: block; margin-bottom: 16px;">Đang phân tích tệp âm thanh qua Pipeline AI...</strong>
           
-          <strong style="font-size: 15px;">Đang phân tích tệp âm thanh qua các mô hình AI...</strong>
-          
-          <div class="ai-steps">
-            <div class="ai-step pending" id="step-stt">
+          <div class="ai-steps" style="text-align: left; background: rgba(0,0,0,0.3); padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
+            <div class="ai-step pending" id="step-audeering" style="margin-bottom: 10px; display: flex; align-items: center; gap: 10px; font-size: 13px;">
               <i class="far fa-circle"></i>
-              <span>Chuyển tự âm thanh STT (PhoWhisper)</span>
+              <span>Trích xuất độ tuổi bằng AI audEERING</span>
             </div>
-            <div class="ai-step pending" id="step-predict">
+            <div class="ai-step pending" id="step-purity" style="margin-bottom: 10px; display: flex; align-items: center; gap: 10px; font-size: 13px;">
               <i class="far fa-circle"></i>
-              <span>Dự đoán Nhóm tuổi & Giới tính (wav2vec2)</span>
+              <span>Tính % độ thuần giọng tỉnh thành</span>
             </div>
-            <div class="ai-step pending" id="step-verify">
+            <div class="ai-step pending" id="step-stt" style="margin-bottom: 10px; display: flex; align-items: center; gap: 10px; font-size: 13px;">
               <i class="far fa-circle"></i>
-              <span>Xác minh độ khớp phương ngữ tỉnh đã chọn</span>
+              <span>Whisper AI nhận diện phụ đề giọng địa phương</span>
             </div>
-            <div class="ai-step pending" id="step-tag">
+            <div class="ai-step pending" id="step-rag" style="display: flex; align-items: center; gap: 10px; font-size: 13px;">
               <i class="far fa-circle"></i>
-              <span>LLM Tự động gắn tag & tóm tắt bối cảnh</span>
+              <span>Từ điển RAG dịch sang Tiếng Phổ thông</span>
             </div>
           </div>
         </div>

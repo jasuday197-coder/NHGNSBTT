@@ -5182,26 +5182,6 @@ const AUDIO_CORPUS = [
       "YouTube",
       "Thừa Thiên Huế"
     ]
-  },
-  {
-    "id": "a3",
-    "title": "Lời dặn dò của Mạ Huế",
-    "province": "Thừa Thiên Huế",
-    "dialectGroup": "Bình Trị Thiên",
-    "speaker": "Lê Thị Thảo",
-    "ageGroup": "71+",
-    "gender": "Nữ",
-    "topic": "Lịch sử & Văn hóa",
-    "audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
-    "transcriptDialect": "Con đi học xa cố mần ăn học hành cho đàng hoàng nghe con. Đừng có đua đòi chúng bạn rồi đau trốc mệt người ra tê.",
-    "transcriptStandard": "Con đi học xa cố gắng học hành cho đàng hoàng nghe con. Đừng có đua đòi bạn bè rồi đau đầu mệt người ra đấy.",
-    "verified": true,
-    "confidence": 94,
-    "tags": [
-      "Gia đình",
-      "Huế thương",
-      "Lời dặn"
-    ]
   }
 ];
 

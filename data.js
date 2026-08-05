@@ -5096,6 +5096,25 @@ const DIALECT_LEXICON = [
 // Nhãn chủ đề gồm: "Lịch sử & Văn hóa", "Giọng ca đặc trưng (Ví Giặm, Ca Huế...)", "Tổng quan vùng (Địa lý, Đời sống...)"
 const AUDIO_CORPUS = [
   {
+    "id": "speech_1785940166113",
+    "title": "Xứ huế quê tôi",
+    "province": "Thừa Thiên Huế",
+    "dialectGroup": "Bình Trị Thiên",
+    "speaker": "Ẩn danh",
+    "ageGroup": "18-35",
+    "gender": "Nam",
+    "topic": "Tổng quan vùng",
+    "audioUrl": "/uploads/speech_1785940165313.ogg",
+    "transcriptDialect": "Huy là quê hương của tôi, nơi đấy có nhiều cảnh đẹp, có người chân chất và có dòng nổi rất riêng. Tôi muốn gọi một phân nhò để lưu giữ tình nổi của quê mình.",
+    "transcriptStandard": "Huy là quê hương của tôi, nơi đấy có nhiều cảnh đẹp, có người chân chất và có dòng nổi rất riêng. Tôi muốn gọi một phân nhò để lưu giữ tình nổi của quê mình.",
+    "verified": true,
+    "confidence": 96,
+    "tags": [
+      "Tổng",
+      "Thừa Thiên Huế"
+    ]
+  },
+  {
     "id": "yt_1784202311657",
     "title": "TIẾNG NGHỆ AN",
     "province": "Thanh Hóa",
@@ -5181,26 +5200,6 @@ const AUDIO_CORPUS = [
     "tags": [
       "YouTube",
       "Thừa Thiên Huế"
-    ]
-  },
-  {
-    "id": "a3",
-    "title": "Lời dặn dò của Mạ Huế",
-    "province": "Thừa Thiên Huế",
-    "dialectGroup": "Bình Trị Thiên",
-    "speaker": "Lê Thị Thảo",
-    "ageGroup": "71+",
-    "gender": "Nữ",
-    "topic": "Lịch sử & Văn hóa",
-    "audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
-    "transcriptDialect": "Con đi học xa cố mần ăn học hành cho đàng hoàng nghe con. Đừng có đua đòi chúng bạn rồi đau trốc mệt người ra tê.",
-    "transcriptStandard": "Con đi học xa cố gắng học hành cho đàng hoàng nghe con. Đừng có đua đòi bạn bè rồi đau đầu mệt người ra đấy.",
-    "verified": true,
-    "confidence": 94,
-    "tags": [
-      "Gia đình",
-      "Huế thương",
-      "Lời dặn"
     ]
   }
 ];

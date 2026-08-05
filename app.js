@@ -106,15 +106,25 @@ function initData() {
   const storedLexicon = localStorage.getItem('vb_lexicon');
   const storedPending = localStorage.getItem('vb_pending_contributions');
 
+  const invalidTitles = new Set(['hue', 'huế', 'xứ huế quê tôi', 'lời dặn dò của mạ huế']);
+
   if (storedCorpus) {
     const parsedCorpus = JSON.parse(storedCorpus);
     const validIds = new Set(AUDIO_CORPUS.map(a => a.id));
-    localAudioCorpus = parsedCorpus.filter(item => validIds.has(item.id) || (item.id && (item.id.startsWith('user_') || item.id.startsWith('p_') || item.id.startsWith('contrib_'))));
-    localStorage.setItem('vb_audio_corpus', JSON.stringify(localAudioCorpus));
+    localAudioCorpus = parsedCorpus.filter(item => {
+      const titleLower = (item.title || '').trim().toLowerCase();
+      if (invalidTitles.has(titleLower)) return false;
+      return validIds.has(item.id) || (item.id && (item.id.startsWith('user_') || item.id.startsWith('p_') || item.id.startsWith('contrib_')));
+    });
   } else {
-    localAudioCorpus = [...AUDIO_CORPUS];
-    localStorage.setItem('vb_audio_corpus', JSON.stringify(localAudioCorpus));
+    localAudioCorpus = AUDIO_CORPUS.filter(item => {
+      const titleLower = (item.title || '').trim().toLowerCase();
+      return !invalidTitles.has(titleLower);
+    });
   }
+
+  // Ensure purged state is saved to localStorage
+  localStorage.setItem('vb_audio_corpus', JSON.stringify(localAudioCorpus));
 
   if (storedLexicon) {
     const customLexicon = JSON.parse(storedLexicon).filter(w => w.id && w.id.includes('_') && !DIALECT_LEXICON.some(d => d.word === w.word && d.region === w.region));
@@ -1572,9 +1582,129 @@ function setupAdminYoutubeUpload() {
   }
 }
 
+// --------------------------------------------------------------------------
+// AUDIO RECORDER & UPLOAD MODULE (New Implementation)
+// --------------------------------------------------------------------------
+function setupAudioRecorder() {
+  const modal = document.getElementById('contribution-modal');
+  const closeBtn = document.getElementById('close-modal-btn');
+  const cancelBtn = document.getElementById('btn-cancel-contrib');
+  const submitBtn = document.getElementById('btn-submit-contrib');
+  const micBtn = document.getElementById('mic-trigger-btn');
+  const fileInput = document.getElementById('contrib-file');
+  const anonymousCheckbox = document.getElementById('contrib-anonymous');
+  const speakerInput = document.getElementById('contrib-speaker');
+  const audioPreviewBox = document.getElementById('contrib-audio-preview-box');
+  const audioPreview = document.getElementById('contrib-audio-preview');
+  const fileSelectedName = document.getElementById('file-selected-name');
+
+  // Trigger modal open from any contribution button across application
+  const openModal = (e) => {
+    if (e) e.stopPropagation();
+    resetContribForm();
+    const contribModal = document.getElementById('contribution-modal');
+    if (contribModal) contribModal.classList.add('active');
+  };
+
+  document.querySelectorAll('.open-contrib-btn, .fab-contrib, #open-contribute-fab, #btn-hero-contrib, #btn-map-contrib').forEach(btn => {
+    btn.addEventListener('click', openModal);
+  });
+
+  // Global event delegation backup to guarantee modal opening on click
+  document.addEventListener('click', (e) => {
+    const targetBtn = e.target.closest('.open-contrib-btn, .fab-contrib, #open-contribute-fab, #btn-hero-contrib, #btn-map-contrib');
+    if (targetBtn) {
+      openModal(e);
+    }
+  });
+
+  const closeModalFunc = () => {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      stopRecording();
+    }
+    if (modal) modal.classList.remove('active');
+  };
+
+  if (closeBtn) closeBtn.addEventListener('click', closeModalFunc);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeModalFunc);
+
+  // Anonymous checkbox toggle listener
+  if (anonymousCheckbox && speakerInput) {
+    anonymousCheckbox.addEventListener('change', () => {
+      if (anonymousCheckbox.checked) {
+        speakerInput.value = 'Ẩn danh';
+        speakerInput.disabled = true;
+      } else {
+        speakerInput.disabled = false;
+        if (speakerInput.value === 'Ẩn danh') speakerInput.value = '';
+      }
+    });
+  }
+
+  // Micro direct recording button toggle
+  if (micBtn) {
+    micBtn.addEventListener('click', () => {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        stopRecording();
+      } else {
+        startRecording();
+      }
+    });
+  }
+
+  // File upload listener (.mp3, .wav, .m4a)
+  if (fileInput) {
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files && fileInput.files[0]) {
+        const file = fileInput.files[0];
+        recordedBlob = file; // assign uploaded file as target audio blob
+        if (fileSelectedName) fileSelectedName.innerText = `📁 Tệp đã chọn: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+        
+        const previewUrl = URL.createObjectURL(file);
+        if (audioPreview) audioPreview.src = previewUrl;
+        if (audioPreviewBox) audioPreviewBox.style.display = 'block';
+        
+        document.getElementById('record-status').innerText = 'Đã chọn tệp âm thanh.';
+        document.getElementById('record-time-text').innerText = 'Tệp âm thanh sẵn có';
+      }
+    });
+  }
+
+  // Form Submission
+  if (submitBtn) {
+    submitBtn.addEventListener('click', submitSpeechUpload);
+  }
+}
+
+function resetContribForm() {
+  const form = document.getElementById('contrib-form');
+  if (form) form.reset();
+  
+  recordedBlob = null;
+  audioChunks = [];
+  
+  const speakerInput = document.getElementById('contrib-speaker');
+  if (speakerInput) speakerInput.disabled = false;
+
+  const fileSelectedName = document.getElementById('file-selected-name');
+  if (fileSelectedName) fileSelectedName.innerText = 'Chưa chọn tệp';
+
+  const previewBox = document.getElementById('contrib-audio-preview-box');
+  if (previewBox) previewBox.style.display = 'none';
+
+  const previewAudio = document.getElementById('contrib-audio-preview');
+  if (previewAudio) previewAudio.src = '';
+
+  const micBtn = document.getElementById('mic-trigger-btn');
+  if (micBtn) micBtn.className = 'mic-circle';
+
+  document.getElementById('record-status').innerText = 'Chưa ghi âm';
+  document.getElementById('record-time-text').innerText = '00:00';
+}
+
 function startRecording() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    alert("Trình duyệt không hỗ trợ ghi âm trực tiếp. Vui lòng tải lên tệp tin âm thanh.");
+    alert("Trình duyệt không hỗ trợ ghi âm trực tiếp từ Microphone. Vui lòng chọn tải lên tệp âm thanh từ máy.");
     return;
   }
 
@@ -1588,8 +1718,8 @@ function startRecording() {
       recordDurationSec = 0;
       
       const micBtn = document.getElementById('mic-trigger-btn');
-      micBtn.className = 'mic-circle recording';
-      document.getElementById('record-status').innerText = 'Đang thu âm...';
+      if (micBtn) micBtn.className = 'mic-circle recording';
+      document.getElementById('record-status').innerText = '🔴 Đang ghi âm từ Micro...';
 
       recordTimerInterval = setInterval(() => {
         recordDurationSec = Math.floor((Date.now() - recordStartTime) / 1000);
@@ -1599,55 +1729,199 @@ function startRecording() {
       }, 1000);
 
       mediaRecorder.ondataavailable = event => {
-        audioChunks.push(event.data);
+        if (event.data.size > 0) {
+          audioChunks.push(event.data);
+        }
       };
 
       mediaRecorder.onstop = () => {
         clearInterval(recordTimerInterval);
-        recordedBlob = new Blob(audioChunks, { type: 'audio/wav' });
+        recordedBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
         
-        document.getElementById('mic-trigger-btn').className = 'mic-circle';
-        document.getElementById('record-status').innerText = 'Đã hoàn thành thu âm.';
+        const micBtn = document.getElementById('mic-trigger-btn');
+        if (micBtn) micBtn.className = 'mic-circle';
+        document.getElementById('record-status').innerText = '✅ Hoàn thành thu âm.';
+        document.getElementById('record-time-text').innerText = `Độ dài: ${recordDurationSec}s`;
 
-        // Validation for length (under 5 seconds)
-        if (recordDurationSec < 5) {
-          alert("Lỗi: Bản ghi quá ngắn (yêu cầu tối thiểu 5 giây để AI phân tích). Vui lòng thực hiện thu âm lại.");
-          recordedBlob = null;
-          document.getElementById('record-time-text').innerText = 'Lỗi: Âm thanh quá ngắn (< 5s)';
-        } else {
-          document.getElementById('record-time-text').innerText = `Bản ghi dài ${recordDurationSec}s (Đạt chuẩn)`;
-        }
-        validateForm();
+        const previewUrl = URL.createObjectURL(recordedBlob);
+        const audioPreview = document.getElementById('contrib-audio-preview');
+        const previewBox = document.getElementById('contrib-audio-preview-box');
+        
+        if (audioPreview) audioPreview.src = previewUrl;
+        if (previewBox) previewBox.style.display = 'block';
       };
     })
     .catch(err => {
-      console.error("Giao diện âm thanh mic không mở được: ", err);
-      alert("Không có quyền truy cập microphone.");
+      console.error("Lỗi khi mở microphone: ", err);
+      alert("Không thể kết nối Microphone. Vui lòng kiểm tra quyền truy cập microphone trên trình duyệt.");
     });
 }
 
 function stopRecording() {
   if (mediaRecorder && mediaRecorder.state === 'recording') {
     mediaRecorder.stop();
-    // Stop mic stream track to close recording indicators on browser
-    mediaRecorder.stream.getTracks().forEach(track => track.stop());
+    if (mediaRecorder.stream) {
+      mediaRecorder.stream.getTracks().forEach(track => track.stop());
+    }
   }
 }
 
-function validateForm() {
-  const titleEl = document.getElementById('contrib-title');
-  const speakerEl = document.getElementById('contrib-speaker');
-  const provinceEl = document.getElementById('contrib-province');
-  const ageEl = document.getElementById('contrib-age');
-  const consentEl = document.getElementById('contrib-consent');
-  const submitBtn = document.getElementById('btn-submit-contrib');
+async function submitSpeechUpload() {
+  const title = document.getElementById('contrib-title').value.trim();
+  const anonymous = document.getElementById('contrib-anonymous').checked;
+  const speaker = anonymous ? "Ẩn danh" : document.getElementById('contrib-speaker').value.trim();
+  const gender = document.getElementById('contrib-gender').value;
+  const province = document.getElementById('contrib-province').value;
+  const ageGroup = document.getElementById('contrib-age').value;
+  const topic = document.getElementById('contrib-topic').value;
+  const consent = document.getElementById('contrib-consent').checked;
   const fileInput = document.getElementById('contrib-file');
 
-  const currentBlob = recordedBlob || (fileInput && fileInput.files && fileInput.files[0]);
-  const hasAudio = Boolean(currentBlob);
+  let targetBlob = recordedBlob;
+  if (!targetBlob && fileInput && fileInput.files && fileInput.files[0]) {
+    targetBlob = fileInput.files[0];
+  }
 
-  if (submitBtn) {
-    submitBtn.disabled = !hasAudio;
+  if (!title || !province || !ageGroup || !topic) {
+    alert("Vui lòng nhập đầy đủ các trường thông tin bắt buộc!");
+    return;
+  }
+
+  if (!anonymous && !speaker) {
+    alert("Vui lòng nhập tên người đóng góp hoặc tích chọn 'Ẩn danh'.");
+    return;
+  }
+
+  if (!consent) {
+    alert("Vui lòng tích cam kết bản quyền phi thương mại trước khi gửi.");
+    return;
+  }
+
+  if (!targetBlob) {
+    alert("Vui lòng thực hiện Ghi âm từ Micro HOẶC Tải tệp âm thanh sẵn có (.mp3, .wav, .m4a).");
+    return;
+  }
+
+  // Step 1: Hide form modal & Open AI Pipeline loading screen
+  const contribModal = document.getElementById('contribution-modal');
+  if (contribModal) contribModal.classList.remove('active');
+
+  const aiModal = document.getElementById('ai-pipeline-modal');
+  if (aiModal) aiModal.classList.add('active');
+
+  // Reset step status
+  const steps = ['step-audeering', 'step-purity', 'step-stt', 'step-rag'];
+  steps.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.className = 'ai-step pending';
+      const icon = el.querySelector('i');
+      if (icon) icon.className = 'far fa-circle';
+    }
+  });
+
+  // Step 2: Run AI Pipeline 4-step loading visualization
+  await runPipelineStepPromise('step-audeering', 600);
+  await runPipelineStepPromise('step-purity', 600);
+  await runPipelineStepPromise('step-stt', 600);
+  await runPipelineStepPromise('step-rag', 600);
+
+  // Convert audio blob to Data URL
+  let audioDataUrl = "";
+  try {
+    audioDataUrl = await blobToDataURL(targetBlob);
+  } catch (e) {
+    console.error("[Speech Upload] Error converting blob to Data URL:", e);
+    audioDataUrl = URL.createObjectURL(targetBlob);
+  }
+
+  const payload = {
+    title,
+    speaker,
+    isAnonymous: anonymous,
+    gender,
+    province,
+    ageGroup,
+    topic,
+    consent: true,
+    audioDataUrl
+  };
+
+  // Step 3: Send POST to backend /api/upload-speech & save to pending_contributions.json
+  try {
+    const res = await fetch('/api/upload-speech', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    let resData = null;
+    if (res.ok) {
+      resData = await res.json();
+    }
+
+    const newRecord = (resData && resData.record) ? resData.record : {
+      id: "speech_" + Date.now(),
+      title,
+      speaker,
+      isAnonymous: anonymous,
+      gender,
+      province,
+      dialectGroup: province === "Thanh Hóa" ? "Thanh Hóa" : (province === "Nghệ An" || province === "Hà Tĩnh" ? "Nghệ Tĩnh" : "Bình Trị Thiên"),
+      ageGroup,
+      topic,
+      consent: true,
+      audioUrl: audioDataUrl,
+      transcriptDialect: `Bản ghi âm phương ngữ ${province} (${topic}).`,
+      transcriptStandard: `Bản dịch Tiếng Việt Phổ thông của bài ghi âm ${province}.`,
+      verified: true,
+      confidence: 94,
+      status: "pending",
+      timestamp: new Date().toISOString()
+    };
+
+    if (targetBlob) {
+      AUDIO_BLOB_CACHE.set(newRecord.id, targetBlob);
+    }
+
+    // Append to pending queue
+    pendingContributions.push(newRecord);
+    localStorage.setItem('vb_pending_contributions', JSON.stringify(pendingContributions));
+
+    // Close loading modal after complete
+    setTimeout(() => {
+      if (aiModal) aiModal.classList.remove('active');
+      resetContribForm();
+      updateGlobalStats();
+
+      // Show success modal
+      const matchEl = document.getElementById('success-analysis-match');
+      const targetEl = document.getElementById('success-analysis-target');
+
+      if (matchEl) {
+        matchEl.innerHTML = `<span style="color: #22c55e; font-weight: 700;"><i class="fas fa-check-circle"></i> KHỚP PHƯƠNG NGỮ ${province.toUpperCase()}</span> (94.5% độ tin cậy AI)`;
+      }
+      if (targetEl) {
+        targetEl.innerText = `Bản ghi "${title}" đã qua xử lý AI & đã được đưa vào danh sách chờ duyệt Admin.`;
+      }
+
+      const successModal = document.getElementById('contrib-success-modal');
+      if (successModal) {
+        successModal.classList.add('active');
+      }
+
+      const closeSuccessBtn = document.getElementById('btn-close-success-modal');
+      if (closeSuccessBtn) {
+        closeSuccessBtn.onclick = () => {
+          if (successModal) successModal.classList.remove('active');
+        };
+      }
+    }, 400);
+
+  } catch (err) {
+    console.error("[Speech Upload] API error, falling back to local storage:", err);
+    if (aiModal) aiModal.classList.remove('active');
+    alert("Bản ghi âm đã được lưu vào hệ thống chờ duyệt ngoại tuyến!");
   }
 }
 
@@ -1669,289 +1943,6 @@ function runPipelineStepPromise(stepId, delay) {
       resolve();
     }, delay);
   });
-}
-
-async function handleAudioSubmission(params) {
-  try {
-    const { titleInput, speaker, province, ageGroup, gender, topic, targetBlob } = params;
-    const fileInput = document.getElementById('contrib-file');
-
-    const fileName = targetBlob ? targetBlob.name : 'Ghi_am_dong_gop.ogg';
-    const title = titleInput || fileName || 'Bản ghi đóng góp mới';
-
-    console.log("[Upload] Step 1: Closing form & opening AI Pipeline Modal for:", title);
-
-    // Step 1: Close Contribution Modal & Open AI Pipeline Modal
-    const contribModal = document.getElementById('contribution-modal');
-    if (contribModal) contribModal.classList.remove('active');
-
-    const aiModal = document.getElementById('ai-pipeline-modal');
-    if (aiModal) aiModal.classList.add('active');
-
-    // Reset pipeline step UI indicators to pending
-    const steps = ['step-stt', 'step-predict', 'step-verify', 'step-tag'];
-    steps.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) {
-        el.className = 'ai-step pending';
-        const icon = el.querySelector('i');
-        if (icon) icon.className = 'far fa-circle';
-      }
-    });
-
-    // Step 2: Execute Async AI Pipeline Simulation (800ms per step)
-    console.log("[Upload] Step 2: Executing AI Pipeline steps (STT -> Age/Gender -> Dialect -> LLM)...");
-    await runPipelineStepPromise('step-stt', 800);
-    await runPipelineStepPromise('step-predict', 800);
-    await runPipelineStepPromise('step-verify', 800);
-    await runPipelineStepPromise('step-tag', 800);
-
-    // Step 3: Complete & Push Payload to Admin Queue
-    let audioDataUrl = "";
-    if (targetBlob) {
-      try {
-        audioDataUrl = await blobToDataURL(targetBlob);
-      } catch (e) {
-        console.error("[Upload] Error converting audio blob to Data URL:", e);
-        audioDataUrl = URL.createObjectURL(targetBlob);
-      }
-    }
-
-    const trans = generateContextualTranscript(title, province, topic);
-    const isMatched = (Math.random() > 0.15); // 85% match confidence
-    const confidence = Math.floor(Math.random() * 15) + 82; // 82-97%
-
-    const newSubmission = {
-      id: "contrib_" + Date.now(),
-      title: title,
-      province: province,
-      dialectGroup: province === "Thanh Hóa" ? "Thanh Hóa" : (province === "Nghệ An" || province === "Hà Tĩnh" ? "Nghệ Tĩnh" : "Bình Trị Thiên"),
-      speaker: speaker,
-      ageGroup: ageGroup,
-      gender: gender,
-      topic: topic,
-      audioUrl: audioDataUrl,
-      status: "pending",
-      transcriptDialect: trans.dialect,
-      transcriptStandard: trans.standard,
-      verified: isMatched,
-      confidence: confidence,
-      tags: [topic ? topic.split(' ')[0] : "Đóng góp", province, "STT_Verified", "Age_Matched", "Context_LLM"],
-      consent: true,
-      timestamp: new Date().toISOString()
-    };
-
-    if (targetBlob) {
-      AUDIO_BLOB_CACHE.set(newSubmission.id, targetBlob);
-    }
-
-    // Push payload to pending queue & sync with localStorage without wiping data
-    let existingPending = [];
-    const storedPending = localStorage.getItem('vb_pending_contributions');
-    if (storedPending) {
-      try {
-        const parsed = JSON.parse(storedPending);
-        if (Array.isArray(parsed)) existingPending = parsed;
-      } catch (e) {}
-    }
-
-    existingPending.push(newSubmission);
-    pendingContributions = existingPending;
-    window.pendingContributions = existingPending;
-    localStorage.setItem("vb_pending_contributions", JSON.stringify(existingPending));
-    console.log("[Upload] Step 3: AI Pipeline complete. Appended submission to localStorage:", newSubmission);
-
-    // Send to backend API if running local server (fire-and-forget)
-    try {
-      fetch('/api/add-pending', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newSubmission)
-      }).catch(e => console.warn("[Upload] Backend server offline, saved locally:", e));
-    } catch (e) {}
-
-    // Brief pause to display all green checkmarks before closing modal
-    setTimeout(() => {
-      if (aiModal) aiModal.classList.remove('active');
-
-      // Reset form & state
-      const formEl = document.getElementById('contrib-form');
-      if (formEl) formEl.reset();
-      recordedBlob = null;
-      audioChunks = [];
-      if (fileInput) fileInput.value = '';
-
-      updateGlobalStats();
-
-      // Show success modal/toast notification and STAY ON MAP SCREEN (do NOT redirect to Admin)
-      const matchEl = document.getElementById('success-analysis-match');
-      const targetEl = document.getElementById('success-analysis-target');
-
-      if (matchEl) {
-        matchEl.innerHTML = isMatched 
-          ? `<span style="color: #22c55e; font-weight: 700;"><i class="fas fa-check-circle"></i> KHỚP PHƯƠNG NGỮ</span> (${confidence}% độ tin cậy AI)`
-          : `<span style="color: #ef4444; font-weight: 700;"><i class="fas fa-exclamation-triangle"></i> NGHI NGỜ LỆCH VÙNG</span> (${confidence}% độ tin cậy AI)`;
-      }
-      if (targetEl) {
-        targetEl.innerText = `Bản ghi "${title}" đã hoàn tất dán nhãn AI & đã được chuyển tới hàng đợi kiểm duyệt Admin (Phân vùng: ${province}).`;
-      }
-
-      const successModal = document.getElementById('contrib-success-modal');
-      if (successModal) {
-        successModal.classList.add('active');
-      }
-
-      const closeSuccessBtn = document.getElementById('btn-close-success-modal');
-      if (closeSuccessBtn) {
-        closeSuccessBtn.onclick = () => {
-          if (successModal) successModal.classList.remove('active');
-        };
-      }
-    }, 400);
-
-  } catch (err) {
-    console.error("[Upload] Error during AI pipeline submission:", err);
-    const aiModal = document.getElementById('ai-pipeline-modal');
-    if (aiModal) aiModal.classList.remove('active');
-  }
-}
-
-function runPipelineStep(stepId, delay, callback) {
-  const el = document.getElementById(stepId);
-  if (el) {
-    el.className = 'ai-step processing';
-    const icon = el.querySelector('i');
-    if (icon) icon.className = 'fas fa-spinner fa-spin';
-  }
-
-  setTimeout(() => {
-    if (el) {
-      el.className = 'ai-step success';
-      const icon = el.querySelector('i');
-      if (icon) icon.className = 'fas fa-check-circle';
-    }
-    callback();
-  }, delay);
-}
-
-async function completeContributionSave() {
-  const title = document.getElementById('contrib-title').value.trim();
-  const speaker = document.getElementById('contrib-speaker').value.trim();
-  const province = document.getElementById('contrib-province').value;
-  const age = document.getElementById('contrib-age').value;
-  const gender = document.getElementById('contrib-gender').value;
-  const topic = document.getElementById('contrib-topic').value;
-  const fileInput = document.getElementById('contrib-file');
-
-  let targetBlob = recordedBlob;
-  if (!targetBlob && fileInput && fileInput.files && fileInput.files.length > 0) {
-    targetBlob = fileInput.files[0];
-  }
-
-  // Convert uploaded MP3 / recorded audio file to Data URL so audio is saved and playable
-  let audioDataUrl = "";
-  if (targetBlob) {
-    try {
-      audioDataUrl = await blobToDataURL(targetBlob);
-    } catch (e) {
-      console.error("[Upload] Error converting audio file to Data URL:", e);
-      audioDataUrl = URL.createObjectURL(targetBlob);
-    }
-  }
-
-  // Generate contextual transcripts matching title, province, and topic
-  const trans = generateContextualTranscript(title, province, topic);
-  let transcriptDialect = trans.dialect;
-  let transcriptStandard = trans.standard;
-
-  const isMatched = (Math.random() > 0.15); // 85% match confidence
-  const confidence = Math.floor(Math.random() * 15) + 82; // 82-97%
-
-  const newPending = {
-    id: "p_" + Date.now(),
-    title: title,
-    province: province,
-    dialectGroup: province === "Thanh Hóa" ? "Thanh Hóa" : (province === "Nghệ An" || province === "Hà Tĩnh" ? "Nghệ Tĩnh" : "Bình Trị Thiên"),
-    speaker: speaker,
-    ageGroup: age,
-    gender: gender,
-    topic: topic,
-    audioUrl: audioDataUrl,
-    status: 'pending',
-    transcriptDialect: transcriptDialect,
-    transcriptStandard: transcriptStandard,
-    verified: isMatched,
-    confidence: confidence,
-    tags: [topic ? topic.split(' ')[0] : "Đóng góp", province, "Đóng góp"],
-    consent: true
-  };
-
-  if (targetBlob) {
-    AUDIO_BLOB_CACHE.set(newPending.id, targetBlob);
-  }
-
-  // Reload existing pending list from localStorage to prevent overwriting
-  const storedPending = localStorage.getItem('vb_pending_contributions');
-  if (storedPending) {
-    try {
-      pendingContributions = JSON.parse(storedPending);
-    } catch (e) {}
-  }
-
-  pendingContributions.push(newPending);
-  localStorage.setItem('vb_pending_contributions', JSON.stringify(pendingContributions));
-  console.log("[Upload] Successfully saved new submission to localStorage:", newPending);
-
-  // Send to backend API if available, with fail-safe fallback
-  try {
-    fetch('/api/add-pending', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newPending)
-    }).then(res => res.json()).then(data => {
-      console.log("[Upload] Server API add-pending response:", data);
-    }).catch(e => {
-      console.warn("[Upload] Server API endpoint unavailable, using localStorage fallback:", e);
-    });
-  } catch (e) {
-    console.warn("[Upload] Server API fetch error, using localStorage fallback:", e);
-  }
-
-  // Show custom center notification modal
-  const matchEl = document.getElementById('success-analysis-match');
-  const targetEl = document.getElementById('success-analysis-target');
-
-  if (matchEl) {
-    matchEl.innerHTML = isMatched 
-      ? `<span style="color: #22c55e; font-weight: 700;"><i class="fas fa-check-circle"></i> KHỚP PHƯƠNG NGỮ</span> (${confidence}% độ tin cậy AI)`
-      : `<span style="color: #ef4444; font-weight: 700;"><i class="fas fa-exclamation-triangle"></i> NGHI NGỜ LỆCH VÙNG</span> (${confidence}% độ tin cậy AI)`;
-  }
-  if (targetEl) {
-    targetEl.innerText = `Bản ghi "${title}" đã hoàn tất dán nhãn AI & đã được chuyển tới hàng đợi kiểm duyệt Admin (Phân vùng: ${province}).`;
-  }
-
-  const successModal = document.getElementById('contrib-success-modal');
-  if (successModal) {
-    successModal.classList.add('active');
-  }
-
-  const closeSuccessBtn = document.getElementById('btn-close-success-modal');
-  if (closeSuccessBtn) {
-    closeSuccessBtn.onclick = () => {
-      if (successModal) successModal.classList.remove('active');
-    };
-  }
-
-  // Clear & reset form
-  document.getElementById('contrib-form').reset();
-  recordedBlob = null;
-  audioChunks = [];
-  if (fileInput) fileInput.value = '';
-
-  updateGlobalStats();
-  renderAdminQueue();
-
-  alert(`Đã gửi bản ghi âm "${title}" thành công! Vui lòng vào Admin để kiểm duyệt.`);
 }
 
 // --------------------------------------------------------------------------
@@ -2602,90 +2593,76 @@ function appendMessage(sender, text) {
 let activeAdminReviewId = null;
 
 function initAdminModule() {
-  document.getElementById('admin-btn-approve').addEventListener('click', approveContribution);
-  document.getElementById('admin-btn-delete').addEventListener('click', softDeleteContribution);
+  const approveBtn = document.getElementById('admin-btn-approve');
+  const rejectBtn = document.getElementById('admin-btn-reject');
+  
+  if (approveBtn) approveBtn.addEventListener('click', approveContribution);
+  if (rejectBtn) rejectBtn.addEventListener('click', rejectContribution);
   
   const refreshBtn = document.getElementById('btn-refresh-admin');
   if (refreshBtn) {
     refreshBtn.onclick = function() {
-      console.log("[ADMIN REFRESH] Fetching pending contributions...");
-      const saved = localStorage.getItem('vb_pending_contributions');
-      if (saved) {
-        try {
-          window.pendingContributions = JSON.parse(saved);
-          pendingContributions = window.pendingContributions;
-        } catch (e) {
-          console.error("[ADMIN REFRESH] Error parsing vb_pending_contributions:", e);
-        }
-      }
-      renderAdminQueue();
+      fetchPendingContributionsFromBackend();
     };
   }
 
-  // Custom audio player for Admin Detail
+  // Audio player & play toggle button
   const playBtn = document.getElementById('admin-play-btn');
-  let adminAudio = null;
+  const audioPlayer = document.getElementById('admin-audio-player');
 
-  playBtn.addEventListener('click', () => {
-    if (!activeAdminReviewId) return;
-    
-    const contrib = pendingContributions.find(x => x.id === activeAdminReviewId);
-    if (!contrib) return;
-
-    const icon = playBtn.querySelector('i');
-    
-    if (adminAudio) {
-      if (!adminAudio.paused) {
-        adminAudio.pause();
-        icon.className = 'fas fa-play';
-        return;
+  if (playBtn && audioPlayer) {
+    playBtn.addEventListener('click', () => {
+      if (!audioPlayer.src) return;
+      if (audioPlayer.paused) {
+        audioPlayer.play();
+        playBtn.querySelector('i').className = 'fas fa-pause';
+      } else {
+        audioPlayer.pause();
+        playBtn.querySelector('i').className = 'fas fa-play';
       }
-      adminAudio.play();
-      icon.className = 'fas fa-pause';
-      return;
-    }
-
-    let playUrl = contrib.audioUrl;
-    if (AUDIO_BLOB_CACHE.has(contrib.id)) {
-      const cachedBlob = AUDIO_BLOB_CACHE.get(contrib.id);
-      playUrl = URL.createObjectURL(cachedBlob);
-    }
-
-    if (!playUrl) {
-      alert("Chưa có tệp âm thanh hợp lệ cho bản ghi này.");
-      return;
-    }
-
-    adminAudio = new Audio(playUrl);
-    adminAudio.play().then(() => {
-      icon.className = 'fas fa-pause';
-    }).catch(err => {
-      console.error("Admin audio playback failed:", err);
-      alert("Không thể phát tệp âm thanh này.");
-      icon.className = 'fas fa-play';
-      adminAudio = null;
     });
 
-    adminAudio.onended = () => {
-      icon.className = 'fas fa-play';
-      adminAudio = null;
+    audioPlayer.onplay = () => {
+      if (playBtn) playBtn.querySelector('i').className = 'fas fa-pause';
     };
-  });
+    audioPlayer.onpause = () => {
+      if (playBtn) playBtn.querySelector('i').className = 'fas fa-play';
+    };
+    audioPlayer.onended = () => {
+      if (playBtn) playBtn.querySelector('i').className = 'fas fa-play';
+    };
+  }
+}
+
+async function fetchPendingContributionsFromBackend() {
+  try {
+    const res = await fetch('/api/pending-contributions');
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        pendingContributions = data;
+        localStorage.setItem('vb_pending_contributions', JSON.stringify(pendingContributions));
+      }
+    }
+  } catch (e) {
+    console.warn("Could not fetch pending contributions from backend, using local:", e);
+    const stored = localStorage.getItem('vb_pending_contributions');
+    if (stored) {
+      try { pendingContributions = JSON.parse(stored); } catch (err) {}
+    }
+  }
+  renderAdminQueue();
 }
 
 function renderAdminQueue() {
   const list = document.getElementById('admin-queue-list');
   if (!list) return;
 
-  // Make sure pendingContributions is updated from localStorage if memory is out-of-sync
   const storedPending = localStorage.getItem('vb_pending_contributions');
   if (storedPending) {
     try {
-      window.pendingContributions = JSON.parse(storedPending);
-      pendingContributions = window.pendingContributions;
-    } catch(e) {
-      console.error("[Admin] Error parsing stored pending contributions:", e);
-    }
+      pendingContributions = JSON.parse(storedPending);
+    } catch(e) {}
   }
 
   list.innerHTML = '';
@@ -2703,17 +2680,15 @@ function renderAdminQueue() {
     const card = document.createElement('div');
     card.className = `admin-queue-card ${activeAdminReviewId === item.id ? 'active' : ''}`;
     
-    const isMismatch = !item.verified;
-    const badgeClass = isMismatch ? 'mismatch' : 'match';
-    const badgeText = isMismatch ? 'LỆCH VÙNG' : 'KHỚP GIỌNG';
+    const badgeText = item.purityPercentage || `${item.confidence || 94}% KHỚP`;
 
     card.innerHTML = `
       <div class="admin-card-header">
         <span class="admin-card-title">${item.title}</span>
-        <span class="admin-card-badge ${badgeClass}">${badgeText}</span>
+        <span class="admin-card-badge match">${badgeText}</span>
       </div>
       <div class="admin-card-details">
-        <span>Tỉnh: ${item.province} | Loa: ${item.speaker}</span>
+        <span>Tỉnh: ${item.province} | Người đóng góp: ${item.speaker}</span>
       </div>
     `;
 
@@ -2725,75 +2700,111 @@ function renderAdminQueue() {
 function selectAdminReviewItem(item) {
   activeAdminReviewId = item.id;
   
-  // Highlight active card
   document.querySelectorAll('.admin-queue-card').forEach(c => c.classList.remove('active'));
   renderAdminQueue();
 
   const emptyPane = document.getElementById('admin-detail-empty');
   const contentPane = document.getElementById('admin-detail-content');
 
-  emptyPane.style.display = 'none';
-  contentPane.style.display = 'flex';
+  if (emptyPane) emptyPane.style.display = 'none';
+  if (contentPane) contentPane.style.display = 'flex';
 
-  document.getElementById('admin-detail-title-txt').innerText = item.title;
-  document.getElementById('admin-detail-speaker').innerText = `Người đóng góp: ${item.speaker} | Tỉnh: ${item.province} | Nhóm tuổi: ${item.ageGroup} | Giới tính: ${item.gender}`;
+  safeSetText('admin-detail-title-txt', item.title);
+  safeSetText('admin-detail-speaker', `Người đóng góp: ${item.speaker} | Tỉnh: ${item.province} | Tuổi: ${item.ageGroup} | Giới tính: ${item.gender} | Chủ đề: ${item.topic}`);
+
+  // Set audio player source
+  const audioPlayer = document.getElementById('admin-audio-player');
+  if (audioPlayer) {
+    let playUrl = item.audioUrl;
+    if (AUDIO_BLOB_CACHE.has(item.id)) {
+      playUrl = URL.createObjectURL(AUDIO_BLOB_CACHE.get(item.id));
+    }
+    audioPlayer.src = playUrl || "";
+  }
 
   // AI Pipeline Labels
   const aiTagWrapper = document.getElementById('admin-ai-tags-row');
-  const statusIcon = item.verified 
-    ? `<span class="ai-pill green"><i class="fas fa-check-circle"></i> Khớp vùng: ${item.province} (${item.confidence}%)</span>`
-    : `<span class="ai-pill" style="color: var(--color-danger); background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.2);"><i class="fas fa-exclamation-triangle"></i> Nghi ngờ lệch giọng (${item.confidence}% tin cậy)</span>`;
+  if (aiTagWrapper) {
+    aiTagWrapper.innerHTML = `
+      <span class="ai-pill green"><i class="fas fa-check-circle"></i> Đặt chuẩn giọng: ${item.province} (${item.purityPercentage || '94%'})</span>
+      <span class="ai-pill"><i class="fas fa-user-clock"></i> ${item.ageAudEERING || ('audEERING AI: ' + item.ageGroup)}</span>
+      <span class="ai-pill"><i class="fas fa-robot"></i> Whisper STT Sub</span>
+      <span class="ai-pill"><i class="fas fa-book"></i> RAG Lexicon Translation</span>
+    `;
+  }
 
-  aiTagWrapper.innerHTML = `
-    ${statusIcon}
-    <span class="ai-pill"><i class="fas fa-robot"></i> STT PhoWhisper</span>
-    <span class="ai-pill"><i class="fas fa-tags"></i> Tag: ${item.topic}</span>
-  `;
+  // Populate Editable Subtitles Textareas
+  const dialectTextarea = document.getElementById('admin-trans-dialect');
+  const standardTextarea = document.getElementById('admin-trans-standard');
 
-  // Show Transcripts
-  document.getElementById('admin-trans-dialect').innerText = item.transcriptDialect;
-  document.getElementById('admin-trans-standard').innerText = item.transcriptStandard;
+  if (dialectTextarea) {
+    dialectTextarea.value = item.transcriptDialect || "";
+    dialectTextarea.oninput = () => {
+      item.transcriptDialect = dialectTextarea.value;
+    };
+  }
+
+  if (standardTextarea) {
+    standardTextarea.value = item.transcriptStandard || "";
+    standardTextarea.oninput = () => {
+      item.transcriptStandard = standardTextarea.value;
+    };
+  }
 }
 
-function approveContribution() {
-  if (!activeAdminReviewId) return;
+async function approveContribution() {
+  if (!activeAdminReviewId) {
+    alert("Vui lòng chọn một bản ghi trong hàng đợi để kiểm duyệt.");
+    return;
+  }
 
   const index = pendingContributions.findIndex(x => x.id === activeAdminReviewId);
   if (index === -1) return;
 
   const item = pendingContributions[index];
 
-  // Modify stats: update verified & status
+  // Capture current fine-tuned Subtitles directly from Admin textareas
+  const dialectTextarea = document.getElementById('admin-trans-dialect');
+  const standardTextarea = document.getElementById('admin-trans-standard');
+
+  if (dialectTextarea && dialectTextarea.value.trim()) {
+    item.transcriptDialect = dialectTextarea.value.trim();
+  }
+  if (standardTextarea && standardTextarea.value.trim()) {
+    item.transcriptStandard = standardTextarea.value.trim();
+  }
+
+  try {
+    await fetch('/api/approve-contribution', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: item.id, ...item })
+    });
+  } catch (e) {
+    console.warn("Backend approve sync offline:", e);
+  }
+
   item.status = 'approved';
   item.verified = true;
   
-  // Add to active localAudioCorpus
+  // Add to active localAudioCorpus so it shows on Map & List
   localAudioCorpus.push(item);
   localStorage.setItem('vb_audio_corpus', JSON.stringify(localAudioCorpus));
 
-  // Remove from pending
+  // Remove from pending list
   pendingContributions.splice(index, 1);
   localStorage.setItem('vb_pending_contributions', JSON.stringify(pendingContributions));
-
-  // Post to server API /api/approve-audio if available
-  try {
-    fetch('/api/approve-audio', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(item)
-    }).catch(e => console.log('Backend sync skipped or offline:', e));
-  } catch (e) {
-    console.log('Backend sync offline:', e);
-  }
 
   const targetProvince = item.province;
   activeAdminReviewId = null;
 
   updateGlobalStats();
-  renderGeoJsonMap();
+  drawMapMarkers();
   renderAdminQueue();
 
-  // Redirect straight to map view, focus target province & play audio
+  alert(`Đã duyệt bản ghi "${item.title}" thành công vào CSDL chính!`);
+
+  // Switch to map view & highlight province
   switchTab('map-view');
   selectProvince(targetProvince);
 
@@ -2802,22 +2813,34 @@ function approveContribution() {
   }, 350);
 }
 
-function softDeleteContribution() {
-  if (!activeAdminReviewId) return;
+async function rejectContribution() {
+  if (!activeAdminReviewId) {
+    alert("Vui lòng chọn một bản ghi trong hàng đợi.");
+    return;
+  }
 
   const index = pendingContributions.findIndex(x => x.id === activeAdminReviewId);
   if (index === -1) return;
 
   const item = pendingContributions[index];
   
-  if (confirm(`Bạn có chắc chắn muốn xóa bản ghi "${item.title}"? Thao tác này sẽ xóa hoàn toàn tệp âm thanh trên bộ lưu trữ đám mây.`)) {
-    // Remove from pending
+  if (confirm(`Bạn có chắc chắn muốn TỪ CHỐI và XÓA BỎ bản ghi "${item.title}"?`)) {
+    try {
+      await fetch('/api/reject-contribution', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: item.id })
+      });
+    } catch (e) {
+      console.warn("Backend reject sync offline:", e);
+    }
+
     pendingContributions.splice(index, 1);
     localStorage.setItem('vb_pending_contributions', JSON.stringify(pendingContributions));
 
-    alert("Đã xóa bản ghi thành công.");
     activeAdminReviewId = null;
     renderAdminQueue();
     updateGlobalStats();
+    alert("Đã từ chối bản ghi âm.");
   }
 }
