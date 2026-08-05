@@ -2393,10 +2393,10 @@ function sendChatMessage() {
   input.value = '';
 }
 
-function triggerBotQuestion(text) {
+async function triggerBotQuestion(text) {
   appendMessage('user', text);
   
-  const messageBox = document.getElementById('chat-messages-container');
+  const container = document.getElementById('chat-messages-container');
   const typingBubble = document.createElement('div');
   typingBubble.className = 'chat-bubble bot';
   typingBubble.id = 'chat-typing-indicator-bubble';
@@ -2407,35 +2407,123 @@ function triggerBotQuestion(text) {
       <div class="typing-dot"></div>
     </div>
   `;
-  messageBox.appendChild(typingBubble);
-  messageBox.scrollTop = messageBox.scrollHeight;
+  container.appendChild(typingBubble);
+  container.scrollTop = container.scrollHeight;
 
-  // Fetch response from backend Chatbot API
-  fetch('/api/chatbot', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: text })
-  })
-  .then(res => {
-    if (!res.ok) throw new Error(`Server status ${res.status}`);
-    return res.json();
-  })
-  .then(data => {
-    const typing = document.getElementById('chat-typing-indicator-bubble');
-    if (typing) typing.remove();
-    
-    let botResponse = data.response;
-    if (data.isFallback) {
-      botResponse = `*(Chế độ ngoại tuyến)*\n\n${botResponse}`;
+  try {
+    const response = await fetch('/api/chatbot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server status ${response.status}`);
     }
-    appendMessage('bot', botResponse);
-  })
-  .catch(err => {
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let accumulatedText = '';
+    let buffer = '';
+    let isFallbackMode = false;
+    let botBubble = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (let line of lines) {
+        line = line.trim();
+        if (!line || !line.startsWith('data: ')) continue;
+
+        const dataStr = line.substring(6).trim();
+        if (dataStr === '[DONE]') break;
+
+        try {
+          const parsed = JSON.parse(dataStr);
+          if (parsed.isFallback) {
+            isFallbackMode = true;
+          }
+          if (parsed.content) {
+            if (!botBubble) {
+              const typing = document.getElementById('chat-typing-indicator-bubble');
+              if (typing) typing.remove();
+
+              botBubble = document.createElement('div');
+              botBubble.className = 'chat-bubble bot';
+              container.appendChild(botBubble);
+            }
+
+            accumulatedText += parsed.content;
+
+            let displayText = accumulatedText;
+            if (isFallbackMode && !displayText.startsWith('*(Chế độ ngoại tuyến)*')) {
+              displayText = `*(Chế độ ngoại tuyến)*\n\n${displayText}`;
+            }
+
+            updateBotBubbleContent(botBubble, displayText);
+            container.scrollTop = container.scrollHeight;
+          }
+        } catch (e) {
+          console.warn("Error parsing stream line:", line, e);
+        }
+      }
+    }
+
+    if (buffer.trim().startsWith('data: ')) {
+      const dataStr = buffer.trim().substring(6).trim();
+      if (dataStr !== '[DONE]') {
+        try {
+          const parsed = JSON.parse(dataStr);
+          if (parsed.isFallback) isFallbackMode = true;
+          if (parsed.content) {
+            if (!botBubble) {
+              const typing = document.getElementById('chat-typing-indicator-bubble');
+              if (typing) typing.remove();
+
+              botBubble = document.createElement('div');
+              botBubble.className = 'chat-bubble bot';
+              container.appendChild(botBubble);
+            }
+
+            accumulatedText += parsed.content;
+            let displayText = accumulatedText;
+            if (isFallbackMode && !displayText.startsWith('*(Chế độ ngoại tuyến)*')) {
+              displayText = `*(Chế độ ngoại tuyến)*\n\n${displayText}`;
+            }
+            updateBotBubbleContent(botBubble, displayText);
+            container.scrollTop = container.scrollHeight;
+          }
+        } catch (e) {}
+      }
+    }
+
+    if (!botBubble && !accumulatedText) {
+      const typing = document.getElementById('chat-typing-indicator-bubble');
+      if (typing) typing.remove();
+      runLocalChatbotFallback(text);
+    }
+  } catch (err) {
     console.error("Chatbot API failed, falling back offline:", err);
     const typing = document.getElementById('chat-typing-indicator-bubble');
     if (typing) typing.remove();
     runLocalChatbotFallback(text);
-  });
+  }
+}
+
+function updateBotBubbleContent(bubble, text) {
+  let formattedText = text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
+
+  formattedText += `<div style="font-size: 11px; color: #9ca3af; margin-top: 8px; font-style: italic; border-top: 1px dashed rgba(0,0,0,0.08); padding-top: 4px;">Dữ liệu được hỗ trợ bởi AI chỉ mang tính chất tham khảo. Hệ thống rất mong nhận được phản hồi đóng góp từ bạn!</div>`;
+
+  bubble.innerHTML = formattedText;
 }
 
 function runLocalChatbotFallback(text) {

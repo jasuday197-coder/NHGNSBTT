@@ -256,6 +256,142 @@ function callOpenRouterAPI(apiKey, messages, forceJson = false) {
   return tryModel(0);
 }
 
+// OpenRouter HTTPS Streaming Helper with Multi-Model Fallback
+function callOpenRouterStreamAPI(apiKey, messages, clientRes, onErrorFallback) {
+  const models = [
+    'openrouter/free',
+    'google/gemma-2-9b-it:free'
+  ];
+
+  function tryModel(modelIndex) {
+    if (modelIndex >= models.length) {
+      onErrorFallback(new Error('All OpenRouter API models failed'));
+      return;
+    }
+
+    const modelName = models[modelIndex];
+    const payloadObj = {
+      model: modelName,
+      messages: messages,
+      stream: true
+    };
+    const payload = JSON.stringify(payloadObj);
+
+    const options = {
+      hostname: 'openrouter.ai',
+      port: 443,
+      path: '/api/v1/chat/completions',
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://nganhanggiongnoiso.vn',
+        'X-Title': 'Ngan Hang Giong Noi So',
+        'Content-Length': Buffer.byteLength(payload)
+      },
+      timeout: 25000
+    };
+
+    let streamStarted = false;
+    let streamBuffer = '';
+
+    const req = https.request(options, (res) => {
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        streamStarted = true;
+        clientRes.statusCode = 200;
+        clientRes.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+        clientRes.setHeader('Cache-Control', 'no-cache');
+        clientRes.setHeader('Connection', 'keep-alive');
+
+        res.on('data', (chunk) => {
+          streamBuffer += chunk.toString('utf-8');
+          const lines = streamBuffer.split('\n');
+          // Keep incomplete line in buffer
+          streamBuffer = lines.pop();
+
+          for (let line of lines) {
+            line = line.trim();
+            if (!line) continue;
+            if (line.startsWith('data: ')) {
+              const dataStr = line.substring(6).trim();
+              if (dataStr === '[DONE]') {
+                clientRes.write('data: [DONE]\n\n');
+                continue;
+              }
+              try {
+                const parsed = JSON.parse(dataStr);
+                const deltaContent = parsed.choices?.[0]?.delta?.content;
+                if (deltaContent) {
+                  clientRes.write(`data: ${JSON.stringify({ content: deltaContent })}\n\n`);
+                }
+              } catch (e) {
+                // Ignore parse errors for partial or invalid lines
+              }
+            }
+          }
+        });
+
+        res.on('end', () => {
+          if (streamBuffer.trim().startsWith('data: ')) {
+            const dataStr = streamBuffer.trim().substring(6).trim();
+            if (dataStr !== '[DONE]') {
+              try {
+                const parsed = JSON.parse(dataStr);
+                const deltaContent = parsed.choices?.[0]?.delta?.content;
+                if (deltaContent) {
+                  clientRes.write(`data: ${JSON.stringify({ content: deltaContent })}\n\n`);
+                }
+              } catch (e) {}
+            }
+          }
+          clientRes.write('data: [DONE]\n\n');
+          clientRes.end();
+        });
+      } else {
+        let errorData = '';
+        res.on('data', chunk => errorData += chunk);
+        res.on('end', () => {
+          console.warn(`[OpenRouter Stream Warning] Model ${modelName} returned status ${res.statusCode}: ${errorData}`);
+          if (modelIndex + 1 < models.length) {
+            tryModel(modelIndex + 1);
+          } else {
+            onErrorFallback(new Error(`OpenRouter API returned status ${res.statusCode}`));
+          }
+        });
+      }
+    });
+
+    req.on('error', (e) => {
+      console.error(`[OpenRouter Stream Error on ${modelName}] ${e.message}`);
+      if (!streamStarted && modelIndex + 1 < models.length) {
+        tryModel(modelIndex + 1);
+      } else if (!streamStarted) {
+        onErrorFallback(e);
+      } else {
+        clientRes.end();
+      }
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      console.warn(`[OpenRouter Stream Timeout] Request timed out on model ${modelName}`);
+      if (!streamStarted && modelIndex + 1 < models.length) {
+        tryModel(modelIndex + 1);
+      } else if (!streamStarted) {
+        onErrorFallback(new Error(`API request timed out on model ${modelName}`));
+      } else {
+        clientRes.end();
+      }
+    });
+
+    req.write(payload);
+    req.end();
+  }
+
+  tryModel(0);
+}
+
+
 function readPostBody(req) {
   return new Promise((resolve) => {
     let body = '';
@@ -366,9 +502,9 @@ Chỉ trả về JSON thô duy nhất, không thêm bớt từ ngữ thảo lu�
     return;
   }
 
-  // --- API ROUTE: /api/chatbot ---
-  if (req.method === 'POST' && safeUrl === '/api/chatbot') {
-    readPostBody(req).then(async (body) => {
+  // --- API ROUTE: /api/chatbot & /api/chat ---
+  if (req.method === 'POST' && (safeUrl === '/api/chatbot' || safeUrl === '/api/chat')) {
+    readPostBody(req).then((body) => {
       const { message } = body;
       if (!message) {
         res.statusCode = 400;
@@ -381,21 +517,33 @@ Chỉ trả về JSON thô duy nhất, không thêm bớt từ ngữ thảo lu�
       const apiKey = process.env.OPENROUTER_API_KEY;
       const hasApiKey = apiKey && apiKey !== 'YOUR_OPENROUTER_API_KEY_HERE';
 
-      const quickRepliesFallback = {
-        '"Răng" nghĩa là gì? Cho ví dụ thực tế cách dùng.': `**"Răng"** có nghĩa là **"sao, tại sao, thế nào"** trong tiếng phổ thông.
+      const sendFallbackResponse = (responseText) => {
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.write(`data: ${JSON.stringify({ content: responseText, isFallback: true })}\n\n`);
+        res.write('data: [DONE]\n\n');
+        res.end();
+      };
+
+      const executeFallback = (errMessage) => {
+        console.error("OpenRouter Chatbot API failed, falling back offline:", errMessage);
+        const quickRepliesFallback = {
+          '"Răng" nghĩa là gì? Cho ví dụ thực tế cách dùng.': `**"Răng"** có nghĩa là **"sao, tại sao, thế nào"** trong tiếng phổ thông.
 - **Khu vực sử dụng:** Rất phổ biến tại Nghệ An, Hà Tĩnh, Quảng Bình, Quảng Trị, Thừa Thiên Huế và một số vùng Thanh Hóa.
 - **Ví dụ thực tế:** *"Răng bữa ni mi đi học trễ rứa?"* tương đương *"Sao hôm nay mày đi học muộn thế?"*
 - **Ý nghĩa văn hóa:** Từ "răng" mang ngữ âm cổ, phản ánh bản sắc ngôn ngữ đậm chất miền Trung. Bạn sẽ nghe từ này thường xuyên trong hò Ví Giặm hay các bài ca Huế.`,
-        
-        'Giải thích nghĩa và cách dùng của cụm "Mô, tê, ni, nớ".': `Bộ tứ **"Mô - Tê - Ni - Nớ"** (hoặc "Mô - Tê - Răng - Rứa" / "Tê - Nớ") được coi là **"mật mã ngôn ngữ"** của người dân xứ Nghệ và Bình Trị Thiên:
+          
+          'Giải thích nghĩa và cách dùng của cụm "Mô, tê, ni, nớ".': `Bộ tứ **"Mô - Tê - Ni - Nớ"** (hoặc "Mô - Tê - Răng - Rứa" / "Tê - Nớ") được coi là **"mật mã ngôn ngữ"** của người dân xứ Nghệ và Bình Trị Thiên:
 1. **Mô:** Đâu, ở đâu, chỗ nào (Ví dụ: *Đi mô đó?* -> Đi đâu thế?)
 2. **Tê:** Kia, bên kia, đằng kia (Ví dụ: *Bên tê sông* -> Bên kia sông)
 3. **Ni:** Này, cái này (Ví dụ: *Cấy ni* -> Cái này)
 4. **Nớ:** Đó, kia (Ví dụ: *Người nớ* -> Người đó / Người kia)
 
 Khi kết hợp chúng lại tạo nên ngữ điệu nhịp nhàng, trầm bổng đặc trưng của giọng miền Trung.`,
-        
-        'So sánh sự khác biệt giữa phương ngữ Nghệ Tĩnh với phương ngữ Nam Bộ.': `**So sánh tiếng Nghệ Tĩnh (Nghệ An - Hà Tĩnh) và tiếng Nam Bộ:**
+          
+          'So sánh sự khác biệt giữa phương ngữ Nghệ Tĩnh với phương ngữ Nam Bộ.': `**So sánh tiếng Nghệ Tĩnh (Nghệ An - Hà Tĩnh) và tiếng Nam Bộ:**
 
 | Đặc điểm | Tiếng Nghệ Tĩnh | Tiếng Nam Bộ |
 | :--- | :--- | :--- |
@@ -404,38 +552,10 @@ Khi kết hợp chúng lại tạo nên ngữ điệu nhịp nhàng, trầm bổ
 | **Thế này / Vậy** | Dùng từ **"Rứa"** (Ví dụ: *Thấy rứa*) | Dùng từ **"Vậy"** (Ví dụ: *Thấy vậy*) |
 | **Thanh điệu** | Nặng, trầm sâu, giữ nguyên âm cổ, dấu hỏi/ngã phát âm nặng gần như nhau. | Nhẹ nhàng, bằng phẳng, không phân biệt rõ dấu hỏi và dấu ngã (đều phát âm hơi giống dấu hỏi). |
 | **Tính cách biểu thị** | Mộc mạc, bền bỉ, kiên cường qua âm sắc trầm nặng. | Phóng khoáng, cởi mở, thân thiện qua âm sắc bay bổng. |`
-      };
+        };
 
-      try {
-        if (!hasApiKey) {
-          throw new Error('OPENROUTER_API_KEY is not configured');
-        }
-
-        const RAG = retrieveContext(cleanMessage);
-        const contextBlock = RAG.khoA.map(item => `- Từ địa phương: "${item.word}" -> Nghĩa: "${item.meaning}" (Ví dụ: "${item.example}" dịch là "${item.exampleTranslation}", giải nghĩa: "${item.culturalInsight}")`).join('\n');
-
-        const systemMessage = `Bạn là Trợ lý Văn hóa Thổ âm Sông núi – nhà Ngôn ngữ học kiêm Chuyên gia Văn hóa Dân gian 6 tỉnh Bắc Trung Bộ (Thanh Hóa, Nghệ An, Hà Tĩnh, Quảng Bình, Quảng Trị, Thừa Thiên Huế). Hãy giải thích từ vựng, ngữ pháp, và phong tục văn hóa dựa vào Context được cung cấp từ kho dữ liệu. Phải luôn kèm theo ví dụ thực tế bằng tiếng địa phương và dịch nghĩa sang tiếng Việt phổ thông.
-
-Dưới đây là một số thông tin tham chiếu từ cơ sở dữ liệu (Context RAG):
-${contextBlock || '(Không có thông tin liên quan trực tiếp trong cơ sở dữ liệu. Hãy sử dụng kiến thức chuyên môn của bạn về văn hóa 6 tỉnh Bắc Trung Bộ để giải thích)'}`;
-
-        const messages = [
-          { role: 'system', content: systemMessage },
-          { role: 'user', content: cleanMessage }
-        ];
-
-        const textResult = await callOpenRouterAPI(apiKey, messages, false);
-
-        res.statusCode = 200;
-        res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        res.end(JSON.stringify({ response: textResult }));
-      } catch (err) {
-        console.error("OpenRouter Chatbot API failed, falling back offline:", err);
-        
         if (quickRepliesFallback[cleanMessage]) {
-          res.statusCode = 200;
-          res.setHeader('Content-Type', 'application/json; charset=utf-8');
-          res.end(JSON.stringify({ response: quickRepliesFallback[cleanMessage], isFallback: true }));
+          sendFallbackResponse(quickRepliesFallback[cleanMessage]);
           return;
         }
 
@@ -458,10 +578,30 @@ ${contextBlock || '(Không có thông tin liên quan trực tiếp trong cơ s�
 Bạn có thể thử hỏi nghĩa của các từ cụ thể như *"răng"*, *"ún"*, *"cố"*, *"mô"*, *"tê"*... hoặc dùng các câu hỏi nhanh gợi ý nhé!`;
         }
 
-        res.statusCode = 200;
-        res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        res.end(JSON.stringify({ response: responseText, isFallback: true }));
+        sendFallbackResponse(responseText);
+      };
+
+      if (!hasApiKey) {
+        executeFallback('OPENROUTER_API_KEY is not configured');
+        return;
       }
+
+      const RAG = retrieveContext(cleanMessage);
+      const contextBlock = RAG.khoA.map(item => `- Từ địa phương: "${item.word}" -> Nghĩa: "${item.meaning}" (Ví dụ: "${item.example}" dịch là "${item.exampleTranslation}", giải nghĩa: "${item.culturalInsight}")`).join('\n');
+
+      const systemMessage = `Bạn là Trợ lý Văn hóa Thổ âm Sông núi – nhà Ngôn ngữ học kiêm Chuyên gia Văn hóa Dân gian 6 tỉnh Bắc Trung Bộ (Thanh Hóa, Nghệ An, Hà Tĩnh, Quảng Bình, Quảng Trị, Thừa Thiên Huế). Hãy giải thích từ vựng, ngữ pháp, và phong tục văn hóa dựa vào Context được cung cấp từ kho dữ liệu. Phải luôn kèm theo ví dụ thực tế bằng tiếng địa phương và dịch nghĩa sang tiếng Việt phổ thông.
+
+Dưới đây là một số thông tin tham chiếu từ cơ sở dữ liệu (Context RAG):
+${contextBlock || '(Không có thông tin liên quan trực tiếp trong cơ sở dữ liệu. Hãy sử dụng kiến thức chuyên môn của bạn về văn hóa 6 tỉnh Bắc Trung Bộ để giải thích)'}`;
+
+      const messages = [
+        { role: 'system', content: systemMessage },
+        { role: 'user', content: cleanMessage }
+      ];
+
+      callOpenRouterStreamAPI(apiKey, messages, res, (err) => {
+        executeFallback(err.message || err);
+      });
     });
     return;
   }
