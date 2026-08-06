@@ -5096,6 +5096,91 @@ const DIALECT_LEXICON = [
 // Nhãn chủ đề gồm: "Lịch sử & Văn hóa", "Giọng ca đặc trưng (Ví Giặm, Ca Huế...)", "Tổng quan vùng (Địa lý, Đời sống...)"
 const AUDIO_CORPUS = [
   {
+    "id": "yt_1785982902246",
+    "title": "Giọng nói Quảng Trị - Đinh Thanh Hải 02",
+    "province": "Thanh Hóa",
+    "dialectGroup": "Thanh Hóa",
+    "speaker": "YouTube Media",
+    "ageGroup": "36-55",
+    "gender": "Khác",
+    "topic": "Lịch sử & Văn hóa",
+    "audioUrl": "",
+    "youtube_url": "https://www.youtube.com/watch?v=G1KB581A0gk",
+    "start_time": 134,
+    "end_time": 157,
+    "transcriptDialect": "Bản ghi từ YouTube (Chỉ phát âm thanh)",
+    "transcriptStandard": "Bản ghi từ YouTube (Chỉ phát âm thanh)",
+    "verified": true,
+    "confidence": 95,
+    "tags": [
+      "YouTube",
+      "Thanh Hóa"
+    ]
+  },
+  {
+    "id": "yt_1785982832919",
+    "title": "Giọng nói Quảng Trị - Đinh Thanh Hải",
+    "province": "Quảng Trị",
+    "dialectGroup": "Bình Trị Thiên",
+    "speaker": "YouTube Media",
+    "ageGroup": "36-55",
+    "gender": "Khác",
+    "topic": "Lịch sử & Văn hóa",
+    "audioUrl": "",
+    "youtube_url": "https://www.youtube.com/watch?v=G1KB581A0gk",
+    "start_time": 122,
+    "end_time": 133,
+    "transcriptDialect": "Bản ghi từ YouTube (Chỉ phát âm thanh)",
+    "transcriptStandard": "Bản ghi từ YouTube (Chỉ phát âm thanh)",
+    "verified": true,
+    "confidence": 95,
+    "tags": [
+      "YouTube",
+      "Quảng Trị"
+    ]
+  },
+  {
+    "id": "speech_1785982190513",
+    "title": "Hà Tĩnh 01",
+    "province": "Hà Tĩnh",
+    "dialectGroup": "Nghệ Tĩnh",
+    "speaker": "Ẩn danh",
+    "ageGroup": "<18",
+    "gender": "Nam",
+    "topic": "Tổng quan vùng",
+    "audioUrl": "/uploads/speech_1785982189722.mp3",
+    "transcriptDialect": "Hà Tình Cung Bùi Hè là vương đất của dân ca Vĩ, dám nghe tình nhưng câu hát Vĩ dám mộc mạc và xấu lắm, thường nói về tình quê và đối xử lão đồng. Nghe một câu hát quê minh, tôi luôn thấy rất thân thương và gần gùi.",
+    "transcriptStandard": "Hà Tình Cung Bùi Hè là vương đất của dân ca Vĩ, dám nghe tình nhưng câu hát Vĩ dám mộc mạc và xấu lắm, thường nói về tình quê và đối xử lão đồng. Nghe một câu hát quê minh, tôi luôn thấy rất thân thương và gần gùi.",
+    "verified": true,
+    "confidence": 95,
+    "tags": [
+      "Tổng",
+      "Hà Tĩnh"
+    ]
+  },
+  {
+    "id": "yt_1785981814270",
+    "title": "Ca Huế: Hò Mái Nhì, Nam Bình - Dạ Lê, Bến Thành Audio Video",
+    "province": "Thừa Thiên Huế",
+    "dialectGroup": "Bình Trị Thiên",
+    "speaker": "YouTube Media",
+    "ageGroup": "36-55",
+    "gender": "Khác",
+    "topic": "Giọng ca đặc trưng (Ví Giặm, Ca Huế...)",
+    "audioUrl": "",
+    "youtube_url": "https://www.youtube.com/watch?v=gpIX94R68yc",
+    "start_time": 0,
+    "end_time": 330,
+    "transcriptDialect": "Bản ghi từ YouTube (Chỉ phát âm thanh)",
+    "transcriptStandard": "Bản ghi từ YouTube (Chỉ phát âm thanh)",
+    "verified": true,
+    "confidence": 95,
+    "tags": [
+      "YouTube",
+      "Thừa Thiên Huế"
+    ]
+  },
+  {
     "id": "speech_1785940166113",
     "title": "Xứ huế quê tôi",
     "province": "Thừa Thiên Huế",
