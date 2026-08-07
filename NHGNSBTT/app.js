@@ -115,14 +115,25 @@ function initData() {
     localStorage.setItem('vb_audio_corpus', JSON.stringify(localAudioCorpus));
   }
 
+  const SENSITIVE_WORDS = new Set([
+    'ẻ', 'cóc xê', 'su lích', 'khu mấn', 'địt', 'lẹo', 'khu', 'cức', 'ngỏng',
+    'tè', 'ngá khu', 'đấy', 'khỉ gió', 'đập thâu cha mi giừ',
+    'fỏng', 'phỏng', 'fàm tính', 'phàm tính', 'áo fông', 'áo phông'
+  ]);
+
   if (storedLexicon) {
-    const customLexicon = JSON.parse(storedLexicon).filter(w => w.id && w.id.includes('_') && !DIALECT_LEXICON.some(d => d.word === w.word && d.region === w.region));
-    localLexicon = [...DIALECT_LEXICON, ...customLexicon];
-    localStorage.setItem('vb_lexicon', JSON.stringify(localLexicon));
+    const parsedLexicon = JSON.parse(storedLexicon);
+    const customLexicon = parsedLexicon.filter(w => {
+      const wLower = (w.word || '').trim().toLowerCase();
+      if (SENSITIVE_WORDS.has(wLower)) return false;
+      if (wLower === 'đấy' && w.meaning && (w.meaning.includes('đái') || w.meaning.includes('nước tiểu'))) return false;
+      return w.id && w.id.includes('_') && !DIALECT_LEXICON.some(d => d.word.toLowerCase() === wLower && d.region === w.region);
+    });
+    localLexicon = [...DIALECT_LEXICON.filter(w => !SENSITIVE_WORDS.has(w.word.trim().toLowerCase())), ...customLexicon];
   } else {
-    localLexicon = [...DIALECT_LEXICON];
-    localStorage.setItem('vb_lexicon', JSON.stringify(localLexicon));
+    localLexicon = DIALECT_LEXICON.filter(w => !SENSITIVE_WORDS.has(w.word.trim().toLowerCase()));
   }
+  localStorage.setItem('vb_lexicon', JSON.stringify(localLexicon));
 
   if (storedPending) {
     pendingContributions = JSON.parse(storedPending);
