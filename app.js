@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initAdminModule();
   setupAudioRecorder();
   setupAdminYoutubeUpload();
+  setupReportModal();
   updateGlobalStats();
   initYouTubePlayer();
 });
@@ -107,19 +108,26 @@ function initData() {
   const storedPending = localStorage.getItem('vb_pending_contributions');
 
   const invalidTitles = new Set(['hue', 'huế', 'xứ huế quê tôi', 'lời dặn dò của mạ huế']);
+  const storedDeletedIds = localStorage.getItem('vb_deleted_audio_ids');
+  const deletedIdsSet = new Set(storedDeletedIds ? JSON.parse(storedDeletedIds) : []);
 
   if (storedCorpus) {
     const parsedCorpus = JSON.parse(storedCorpus);
     const validIds = new Set(AUDIO_CORPUS.map(a => a.id));
     localAudioCorpus = parsedCorpus.filter(item => {
+      if (!item) return false;
       const titleLower = (item.title || '').trim().toLowerCase();
       if (invalidTitles.has(titleLower)) return false;
-      return validIds.has(item.id) || (item.id && (item.id.startsWith('user_') || item.id.startsWith('p_') || item.id.startsWith('contrib_')));
+      if (deletedIdsSet.has(item.id)) return false;
+      return validIds.has(item.id) || (item.id && (item.id.startsWith('user_') || item.id.startsWith('p_') || item.id.startsWith('contrib_') || item.id.startsWith('audio_') || item.id.startsWith('speech_') || item.id.startsWith('yt_')));
     });
   } else {
     localAudioCorpus = AUDIO_CORPUS.filter(item => {
+      if (!item) return false;
       const titleLower = (item.title || '').trim().toLowerCase();
-      return !invalidTitles.has(titleLower);
+      if (invalidTitles.has(titleLower)) return false;
+      if (deletedIdsSet.has(item.id)) return false;
+      return true;
     });
   }
 
@@ -151,6 +159,42 @@ function initData() {
   } else {
     pendingContributions = [];
     localStorage.setItem('vb_pending_contributions', JSON.stringify(pendingContributions));
+  }
+
+  fetchAudioDatabaseFromBackend();
+}
+
+async function fetchAudioDatabaseFromBackend() {
+  const storedDeletedIds = localStorage.getItem('vb_deleted_audio_ids');
+  const deletedIdsSet = new Set(storedDeletedIds ? JSON.parse(storedDeletedIds) : []);
+
+  try {
+    const res = await fetch('/api/audio-database');
+    if (res.ok) {
+      const serverRecords = await res.json();
+      if (Array.isArray(serverRecords) && serverRecords.length > 0) {
+        const recordMap = new Map();
+        localAudioCorpus.forEach(item => {
+          if (item && item.id && !deletedIdsSet.has(item.id)) recordMap.set(item.id, item);
+        });
+        serverRecords.forEach(item => {
+          if (item && item.id && !deletedIdsSet.has(item.id)) {
+            recordMap.set(item.id, item);
+          }
+        });
+        localAudioCorpus = Array.from(recordMap.values());
+        localStorage.setItem('vb_audio_corpus', JSON.stringify(localAudioCorpus));
+        updateGlobalStats();
+        if (typeof drawMapMarkers === 'function') {
+          drawMapMarkers();
+        }
+        if (typeof filterMapData === 'function' && selectedProvince) {
+          filterMapData();
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[Audio DB Sync] Could not fetch audio database from backend:", e);
   }
 }
 
@@ -947,10 +991,14 @@ function generateContextualTranscript(title, province, topic) {
       ? `<span style="color: #22c55e; font-weight: 600;"><i class="fas fa-check-circle"></i> Đã kiểm duyệt</span>`
       : `<span style="color: var(--color-primary); font-weight: 600;"><i class="fas fa-certificate"></i> ${aud.confidence}% AI</span>`;
 
+    const safeTitle = (aud.title || '').replace(/'/g, "\\'");
+    const reportBtnHtml = `<span class="report-btn-tag" onclick="event.stopPropagation(); openReportModal('${aud.id}', '${safeTitle}')" title="Báo cáo bản ghi âm này" style="cursor: pointer; color: #ef4444; font-size: 11px; margin-left: auto; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; background: rgba(239,68,68,0.1); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(239,68,68,0.25);"><i class="fas fa-flag"></i> Báo cáo</span>`;
+
     card.innerHTML = `
       <div class="audio-card-meta">
         <span>${aud.ageGroup} | ${aud.gender}</span>
         ${badgeHtml}
+        ${reportBtnHtml}
       </div>
       <div class="audio-card-title">${aud.title}</div>
       <div class="audio-card-speaker"><i class="fas fa-user-circle"></i> ${aud.speaker}</div>
@@ -1059,10 +1107,52 @@ function playSpeechOrToneFallback(text) {
   speakDialectVoice(text, durationSec);
 }
 
+// Helper to check if string is a playable audio URL
+function isValidAudioUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+  return (
+    trimmed.startsWith('blob:') ||
+    trimmed.startsWith('data:audio') ||
+    trimmed.startsWith('/uploads/') ||
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    /\.(mp3|wav|m4a|webm|ogg|aac)$/i.test(trimmed)
+  );
+}
+
 // --------------------------------------------------------------------------
 // Audio Player Engine with Canvas Waveform Visualizer
 // --------------------------------------------------------------------------
 function playAudio(audioObj) {
+  if (!audioObj) return;
+
+  const playBtnIcon = document.getElementById('player-play-btn-icon');
+  const transBox = document.querySelector('.transcript-box');
+
+  // Case 1: Clicking the SAME audio track that is already loaded in mainAudioPlayer
+  if (currentPlayingAudio && currentPlayingAudio.id === audioObj.id && mainAudioPlayer) {
+    if (mainAudioPlayer.paused) {
+      mainAudioPlayer.play().then(() => {
+        if (playBtnIcon) playBtnIcon.className = 'fas fa-pause';
+        startWaveformVisualizer();
+      }).catch(err => {
+        console.warn("Error resuming audio:", err);
+      });
+    } else {
+      mainAudioPlayer.pause();
+      if (playBtnIcon) playBtnIcon.className = 'fas fa-play';
+      stopWaveformVisualizer();
+    }
+    return;
+  }
+
+  // Case 2: New/Different audio track selected -> Stop current playback & load new audio
+  stopAudioPlayer(true); // true = destroy previous Audio object & reset player
+
+  currentPlayingAudio = audioObj;
+
   // Highlight card
   document.querySelectorAll('.audio-card').forEach(el => el.classList.remove('active'));
   const activeCard = document.getElementById(`audio-card-${audioObj.id}`);
@@ -1086,14 +1176,6 @@ function playAudio(audioObj) {
 
   safeSetText('player-transcript-dialect', dialectSub);
   safeSetText('player-transcript-standard', standardSub);
-
-  // Clear previous player
-  stopAudioPlayer();
-
-  currentPlayingAudio = audioObj;
-
-  const playBtnIcon = document.getElementById('player-play-btn-icon');
-  const transBox = document.querySelector('.transcript-box');
 
   if (audioObj.youtube_url) {
     // Hide subtitles for YouTube links
@@ -1121,38 +1203,51 @@ function playAudio(audioObj) {
     // Show subtitles ALWAYS when playing a voice recording!
     if (transBox) transBox.style.display = 'flex';
 
-    if (playBtnIcon) playBtnIcon.className = 'fas fa-pause';
-    startWaveformVisualizer();
-
-    // Check if we have a valid Blob URL or Data URL
+    // Resolve valid play URL (Blob URL from memory cache OR file path /uploads/...)
     let playUrl = audioObj.audioUrl;
     if (AUDIO_BLOB_CACHE.has(audioObj.id)) {
       const cachedBlob = AUDIO_BLOB_CACHE.get(audioObj.id);
-      playUrl = URL.createObjectURL(cachedBlob);
+      if (cachedBlob) {
+        playUrl = URL.createObjectURL(cachedBlob);
+      }
     }
 
-    const isDataOrBlob = playUrl && (playUrl.startsWith('data:audio') || playUrl.startsWith('blob:'));
-
-    if (isDataOrBlob) {
+    if (isValidAudioUrl(playUrl)) {
       try {
         mainAudioPlayer = new Audio(playUrl);
-        
+
         mainAudioPlayer.ontimeupdate = () => {
+          if (!mainAudioPlayer) return;
           const cur = formatTime(mainAudioPlayer.currentTime);
           const dur = formatTime(mainAudioPlayer.duration || 0);
           safeSetText('track-time-lbl', `${cur} / ${dur}`);
         };
 
         mainAudioPlayer.onended = () => {
-          stopAudioPlayer();
+          if (playBtnIcon) playBtnIcon.className = 'fas fa-play';
+          safeSetText('track-time-lbl', `00:00 / ${formatTime(mainAudioPlayer ? mainAudioPlayer.duration : 0)}`);
+          stopWaveformVisualizer();
+        };
+
+        mainAudioPlayer.onplay = () => {
+          if (playBtnIcon) playBtnIcon.className = 'fas fa-pause';
+          startWaveformVisualizer();
+        };
+
+        mainAudioPlayer.onpause = () => {
+          if (playBtnIcon) playBtnIcon.className = 'fas fa-play';
+          stopWaveformVisualizer();
         };
 
         mainAudioPlayer.onerror = (e) => {
-          console.warn("Audio playback error, switching to Speech TTS Voice:", e);
+          console.warn("Audio playback error for URL:", playUrl, e);
           playSpeechOrToneFallback(dialectSub);
         };
 
-        mainAudioPlayer.play().catch(err => {
+        mainAudioPlayer.play().then(() => {
+          if (playBtnIcon) playBtnIcon.className = 'fas fa-pause';
+          startWaveformVisualizer();
+        }).catch(err => {
           console.warn("Audio autoplay blocked, playing Speech TTS Voice:", err);
           playSpeechOrToneFallback(dialectSub);
         });
@@ -1161,26 +1256,20 @@ function playAudio(audioObj) {
         playSpeechOrToneFallback(dialectSub);
       }
     } else {
-      // Play real speech voice synthesis (TTS) + acoustic tone for preset/approved items
+      // Fallback for preset items without audio files
       playSpeechOrToneFallback(dialectSub);
     }
   }
 }
 
 function togglePlayPause() {
-  if (!mainAudioPlayer && (!currentPlayingAudio || !currentPlayingAudio.youtube_url)) {
-    if (currentPlayingAudio) {
-      playAudio(currentPlayingAudio);
-    }
-    return;
-  }
-  
   const icon = document.getElementById('player-play-btn-icon');
 
+  // YouTube track
   if (currentPlayingAudio && currentPlayingAudio.youtube_url) {
     if (ytPlayer && ytPlayerReady && typeof ytPlayer.getPlayerState === 'function') {
       const state = ytPlayer.getPlayerState();
-      if (state === 1) { // 1 is PLAYING in YT API
+      if (state === 1) { // 1 = PLAYING
         ytPlayer.pauseVideo();
         if (icon) icon.className = 'fas fa-play';
         stopWaveformVisualizer();
@@ -1195,35 +1284,69 @@ function togglePlayPause() {
     return;
   }
 
-  if (mainAudioPlayer && !mainAudioPlayer.paused) {
-    mainAudioPlayer.pause();
-    if (icon) icon.className = 'fas fa-play';
-    stopWaveformVisualizer();
+  // HTML5 Audio track: Toggle play / pause on existing mainAudioPlayer WITHOUT creating a new Audio() or resetting currentTime!
+  if (mainAudioPlayer) {
+    if (mainAudioPlayer.paused) {
+      mainAudioPlayer.play().then(() => {
+        if (icon) icon.className = 'fas fa-pause';
+        startWaveformVisualizer();
+      }).catch(err => {
+        console.warn("Error resuming mainAudioPlayer:", err);
+      });
+    } else {
+      mainAudioPlayer.pause();
+      if (icon) icon.className = 'fas fa-play';
+      stopWaveformVisualizer();
+    }
+    return;
+  }
+
+  // If no audio player is active but we have a selected currentPlayingAudio
+  if (currentPlayingAudio) {
+    playAudio(currentPlayingAudio);
   }
 }
 
-function stopAudioPlayer() {
+function stopAudioPlayer(destroy = false) {
+  if (speechTimer) {
+    clearInterval(speechTimer);
+    speechTimer = null;
+  }
+
+  if ('speechSynthesis' in window) {
+    try { window.speechSynthesis.cancel(); } catch (e) {}
+  }
+
   if (mainAudioPlayer) {
     mainAudioPlayer.pause();
-    mainAudioPlayer = null;
-  }
-  if (ytPlayer && ytPlayerReady && typeof ytPlayer.pauseVideo === 'function') {
-    try {
-      ytPlayer.pauseVideo();
-    } catch (e) {
-      console.error(e);
+    if (destroy) {
+      mainAudioPlayer.onended = null;
+      mainAudioPlayer.ontimeupdate = null;
+      mainAudioPlayer.onerror = null;
+      mainAudioPlayer.onplay = null;
+      mainAudioPlayer.onpause = null;
+      mainAudioPlayer = null;
     }
+  }
+
+  if (ytPlayer && ytPlayerReady && typeof ytPlayer.pauseVideo === 'function') {
+    try { ytPlayer.pauseVideo(); } catch (e) {}
   }
   stopYtTimer();
 
   const icon = document.getElementById('player-play-btn-icon');
   if (icon) icon.className = 'fas fa-play';
-  safeSetText('track-time-lbl', '00:00 / 00:00');
+
+  if (destroy) {
+    safeSetText('track-time-lbl', '00:00 / 00:00');
+  }
+
   stopWaveformVisualizer();
 
-  // Hide transcript box when audio stops
-  const transBox = document.querySelector('.transcript-box');
-  if (transBox) transBox.style.display = 'none';
+  if (destroy) {
+    const transBox = document.querySelector('.transcript-box');
+    if (transBox) transBox.style.display = 'none';
+  }
 }
 
 function startYtTimer() {
@@ -2599,9 +2722,475 @@ function appendMessage(sender, text) {
 }
 
 // --------------------------------------------------------------------------
-// Admin Dashboard Module (Moderation Queue)
+// Toast Notification & User Report Violation Engine
+// --------------------------------------------------------------------------
+function showToast(message, type = 'success') {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.style.cssText = 'position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none;';
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement('div');
+  toast.className = `custom-toast ${type}`;
+  toast.style.cssText = 'background: #0f172a; color: #ffffff; border: 1px solid rgba(255,255,255,0.15); border-left: 4px solid #10b981; padding: 12px 20px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 10px; transform: translateY(20px); opacity: 0; transition: all 0.3s ease; pointer-events: auto;';
+  
+  if (type === 'error') toast.style.borderLeftColor = '#ef4444';
+  if (type === 'info') toast.style.borderLeftColor = '#38bdf8';
+  
+  toast.innerHTML = `<i class="${type === 'error' ? 'fas fa-exclamation-circle' : 'fas fa-check-circle'}" style="color: ${type === 'error' ? '#ef4444' : '#10b981'}; font-size: 16px;"></i> <span>${message}</span>`;
+  container.appendChild(toast);
+
+  requestAnimationFrame(() => {
+    toast.style.transform = 'translateY(0)';
+    toast.style.opacity = '1';
+  });
+
+  setTimeout(() => {
+    toast.style.transform = 'translateY(20px)';
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 300);
+  }, 3500);
+}
+window.showToast = showToast;
+
+function reportCurrentPlayingAudio() {
+  if (typeof currentAudio !== 'undefined' && currentAudio) {
+    openReportModal(currentAudio.id, currentAudio.title);
+  } else {
+    showToast('Vui lòng chọn hoặc phát một bản ghi âm để báo cáo!', 'info');
+  }
+}
+window.reportCurrentPlayingAudio = reportCurrentPlayingAudio;
+
+function openReportModal(audioId, audioTitle) {
+  const modal = document.getElementById('report-audio-modal');
+  const titleEl = document.getElementById('report-modal-audio-title');
+  const idInput = document.getElementById('report-audio-id');
+  const noteInput = document.getElementById('report-note');
+
+  let finalId = audioId;
+  let finalTitle = audioTitle;
+
+  if (!finalId && typeof currentAudio !== 'undefined' && currentAudio) {
+    finalId = currentAudio.id;
+    finalTitle = currentAudio.title;
+  }
+
+  if (titleEl) titleEl.innerText = finalTitle || (typeof currentAudio !== 'undefined' && currentAudio ? currentAudio.title : 'Bản ghi âm');
+  if (idInput) idInput.value = finalId || '';
+  if (noteInput) noteInput.value = '';
+
+  const firstRadio = document.querySelector('input[name="report-reason"][value="Sai vị trí tỉnh/thành"]');
+  if (firstRadio) firstRadio.checked = true;
+
+  if (modal) modal.classList.add('active');
+}
+window.openReportModal = openReportModal;
+
+function setupReportModal() {
+  const modal = document.getElementById('report-audio-modal');
+  const closeBtn = document.getElementById('close-report-modal-btn');
+  const cancelBtn = document.getElementById('btn-cancel-report');
+  const submitBtn = document.getElementById('btn-submit-report');
+
+  const closeModal = () => {
+    if (modal) modal.classList.remove('active');
+  };
+
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+
+  if (submitBtn) {
+    submitBtn.onclick = async function() {
+      let audioId = document.getElementById('report-audio-id').value;
+      let audioTitle = document.getElementById('report-modal-audio-title')?.innerText || '';
+      
+      if (!audioId && typeof currentAudio !== 'undefined' && currentAudio) {
+        audioId = currentAudio.id;
+        audioTitle = currentAudio.title;
+      }
+
+      if (!audioId) {
+        audioId = "audio_gen_" + Date.now();
+      }
+
+      const selectedRadio = document.querySelector('input[name="report-reason"]:checked');
+      const reason = selectedRadio ? selectedRadio.value : 'Lý do khác';
+      const noteInput = document.getElementById('report-note');
+      const note = noteInput ? noteInput.value.trim() : '';
+
+      submitBtn.disabled = true;
+      submitBtn.innerText = 'Đang gửi...';
+
+      const payload = {
+        audio_id: audioId,
+        audio_title: audioTitle,
+        title: audioTitle,
+        reason: reason,
+        note: note,
+        created_at: new Date().toISOString(),
+        timestamp: new Date().toISOString()
+      };
+
+      // 1. Try sending to Backend Server API
+      try {
+        const res = await fetch('/api/report-audio', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          console.log("[Report Submission] Server response:", data);
+        }
+      } catch (err) {
+        console.warn("[Report Submission] Server API unreachable, using local persistence fallback:", err);
+      }
+
+      // 2. Local Fallback Persistence (Guarantees report is never lost!)
+      try {
+        let localReports = [];
+        try {
+          localReports = JSON.parse(localStorage.getItem('vb_reported_audios') || '[]');
+        } catch(e) {}
+
+        const reportItem = {
+          id: Date.now(),
+          ...payload,
+          speaker: (typeof currentAudio !== 'undefined' && currentAudio ? currentAudio.speaker : "Ẩn danh"),
+          province: (typeof currentAudio !== 'undefined' && currentAudio ? currentAudio.province : "Bắc Trung Bộ"),
+          audioUrl: (typeof currentAudio !== 'undefined' && currentAudio ? currentAudio.audioUrl : ""),
+          status: "pending_review"
+        };
+
+        const existingIdx = localReports.findIndex(r => r.audio_id === audioId);
+        if (existingIdx !== -1) {
+          localReports[existingIdx] = reportItem;
+        } else {
+          localReports.push(reportItem);
+        }
+
+        localStorage.setItem('vb_reported_audios', JSON.stringify(localReports));
+        
+        if (typeof reportedAudios !== 'undefined') {
+          const idx = reportedAudios.findIndex(r => r.audio_id === audioId);
+          if (idx !== -1) reportedAudios[idx] = reportItem;
+          else reportedAudios.push(reportItem);
+        }
+      } catch (e) {
+        console.error("[Report Submission] Local storage save error:", e);
+      }
+
+      // 3. Always complete flow cleanly with user feedback
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Gửi Báo Cáo';
+
+      closeModal();
+
+      if (noteInput) noteInput.value = '';
+      const form = document.getElementById('report-audio-form');
+      if (form) form.reset();
+      const firstRadio = document.querySelector('input[name="report-reason"][value="Sai vị trí tỉnh/thành"]');
+      if (firstRadio) firstRadio.checked = true;
+
+      showToast('Cảm ơn bạn! Ban quản trị đã ghi nhận báo cáo.', 'success');
+    };
+  }
+}
+
+// --------------------------------------------------------------------------
+// Admin Dashboard Module (Moderation Queue & Violations Management)
 // --------------------------------------------------------------------------
 let activeAdminReviewId = null;
+let reportedAudios = [];
+let activeAdminReportId = null;
+
+function switchAdminSubTab(subTabName) {
+  const pendingTabBtn = document.getElementById('tab-btn-pending');
+  const reportsTabBtn = document.getElementById('tab-btn-reports');
+  const pendingSection = document.getElementById('admin-pending-section');
+  const reportsSection = document.getElementById('admin-reports-section');
+
+  if (subTabName === 'reports') {
+    if (pendingTabBtn) {
+      pendingTabBtn.classList.remove('active');
+      pendingTabBtn.style.background = 'rgba(255,255,255,0.03)';
+      pendingTabBtn.style.color = '#9ca3af';
+      pendingTabBtn.style.borderColor = 'rgba(255,255,255,0.08)';
+    }
+    if (reportsTabBtn) {
+      reportsTabBtn.classList.add('active');
+      reportsTabBtn.style.background = 'rgba(239, 68, 68, 0.15)';
+      reportsTabBtn.style.color = '#ef4444';
+      reportsTabBtn.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+    }
+    if (pendingSection) pendingSection.style.display = 'none';
+    if (reportsSection) reportsSection.style.display = 'block';
+
+    fetchReportedAudiosFromBackend();
+  } else {
+    if (reportsTabBtn) {
+      reportsTabBtn.classList.remove('active');
+      reportsTabBtn.style.background = 'rgba(255,255,255,0.03)';
+      reportsTabBtn.style.color = '#9ca3af';
+      reportsTabBtn.style.borderColor = 'rgba(255,255,255,0.08)';
+    }
+    if (pendingTabBtn) {
+      pendingTabBtn.classList.add('active');
+      pendingTabBtn.style.background = 'rgba(14, 165, 233, 0.15)';
+      pendingTabBtn.style.color = '#38bdf8';
+      pendingTabBtn.style.borderColor = 'rgba(56, 189, 248, 0.3)';
+    }
+    if (reportsSection) reportsSection.style.display = 'none';
+    if (pendingSection) pendingSection.style.display = 'block';
+
+    fetchPendingContributionsFromBackend();
+  }
+}
+window.switchAdminSubTab = switchAdminSubTab;
+
+async function fetchReportedAudiosFromBackend() {
+  let backendReports = [];
+  try {
+    const res = await fetch('/api/admin/reports');
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        backendReports = data;
+      }
+    }
+  } catch (e) {
+    console.warn("Could not fetch reported audios from backend:", e);
+  }
+
+  let localReports = [];
+  try {
+    localReports = JSON.parse(localStorage.getItem('vb_reported_audios') || '[]');
+  } catch(e) {}
+
+  const combined = [...backendReports];
+  localReports.forEach(lr => {
+    if (!combined.some(b => b.audio_id === lr.audio_id || b.id === lr.id)) {
+      combined.push(lr);
+    }
+  });
+
+  reportedAudios = combined;
+  renderAdminReportList();
+}
+
+function renderAdminReportList() {
+  const listContainer = document.getElementById('admin-reports-list');
+  if (!listContainer) return;
+
+  listContainer.innerHTML = '';
+
+  if (!reportedAudios || reportedAudios.length === 0) {
+    listContainer.innerHTML = '<div style="color: var(--text-muted); font-style: italic; text-align: center; padding: 24px; font-size: 13px;">Không có báo cáo vi phạm nào.</div>';
+    const emptyPane = document.getElementById('admin-report-detail-empty');
+    const contentPane = document.getElementById('admin-report-detail-content');
+    if (emptyPane) emptyPane.style.display = 'flex';
+    if (contentPane) contentPane.style.display = 'none';
+    return;
+  }
+
+  reportedAudios.forEach(item => {
+    const card = document.createElement('div');
+    card.className = `admin-queue-card ${activeAdminReportId === item.id ? 'active' : ''}`;
+    card.style.cssText = 'border: 1px solid rgba(239, 68, 68, 0.3); background: var(--bg-surface-solid, #ffffff); border-radius: 10px; padding: 12px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s;';
+    
+    const displayTitle = item.title || item.audio_title || "Bản ghi âm";
+    const displayProvince = item.province || "Bắc Trung Bộ";
+    const displaySpeaker = item.speaker || "Ẩn danh";
+    const displayReason = item.reason || "Báo cáo vi phạm";
+
+    card.innerHTML = `
+      <div class="admin-card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <span class="admin-card-title" style="font-weight: 700; font-size: 13px; color: var(--text-main, #0f172a);">${displayTitle}</span>
+        <span class="admin-card-badge" style="background: rgba(239,68,68,0.12); color: #dc2626; border: 1px solid rgba(239,68,68,0.3); font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; white-space: nowrap;"><i class="fas fa-flag"></i> Báo cáo</span>
+      </div>
+      <div class="admin-card-details" style="color: var(--text-main, #334155); font-size: 12px; margin-bottom: 4px; font-weight: 500;">
+        <span>📍 ${displayProvince} | 👤 ${displaySpeaker}</span>
+      </div>
+      <div style="font-size: 11px; color: var(--text-muted, #475569); font-weight: 600;">
+        Lý do: <span style="color: #dc2626; font-weight: 700;">${displayReason}</span>
+      </div>
+    `;
+
+    card.addEventListener('click', () => selectAdminReportItem(item));
+    listContainer.appendChild(card);
+  });
+}
+
+function selectAdminReportItem(item) {
+  activeAdminReportId = item.id;
+  
+  renderAdminReportList();
+
+  const emptyPane = document.getElementById('admin-report-detail-empty');
+  const contentPane = document.getElementById('admin-report-detail-content');
+
+  if (emptyPane) emptyPane.style.display = 'none';
+  if (contentPane) contentPane.style.display = 'flex';
+
+  const displayTitle = item.title || item.audio_title || "Bản ghi âm";
+  const displayProvince = item.province || "Bắc Trung Bộ";
+  const displaySpeaker = item.speaker || "Ẩn danh";
+  const displayReason = item.reason || "Báo cáo vi phạm";
+  const displayNote = item.note || 'Không có mô tả chi tiết';
+
+  safeSetText('admin-report-title-txt', displayTitle);
+  safeSetText('admin-report-speaker-txt', `Người đóng góp: ${displaySpeaker} | Tỉnh: ${displayProvince}`);
+  safeSetText('admin-report-reason-txt', displayReason);
+  safeSetText('admin-report-note-txt', displayNote);
+  safeSetText('admin-report-time-txt', new Date(item.timestamp || item.created_at || Date.now()).toLocaleString('vi-VN'));
+
+  // Resolve audioUrl if missing in report item
+  let playUrl = item.audioUrl;
+  if (!playUrl && Array.isArray(localAudioCorpus)) {
+    const matched = localAudioCorpus.find(a => a.id === item.audio_id || a.title === displayTitle);
+    if (matched) {
+      playUrl = matched.audioUrl || matched.url;
+      item.audioUrl = playUrl;
+    }
+  }
+
+  const audioPlayer = document.getElementById('admin-report-audio-player');
+  const playBtn = document.getElementById('admin-report-play-btn');
+
+  if (audioPlayer) {
+    if (playUrl) {
+      audioPlayer.src = playUrl;
+      audioPlayer.load();
+    } else {
+      audioPlayer.removeAttribute('src');
+    }
+  }
+
+  if (playBtn && audioPlayer) {
+    playBtn.onclick = () => {
+      if (!playUrl && item.transcriptDialect) {
+        speakDialectVoice(item.transcriptDialect);
+        return;
+      }
+      if (!audioPlayer.src) {
+        showToast('Bản ghi âm này không có file đính kèm.', 'info');
+        return;
+      }
+      if (audioPlayer.paused) {
+        audioPlayer.play().catch(err => console.warn("Audio play error:", err));
+        if (playBtn.querySelector('i')) playBtn.querySelector('i').className = 'fas fa-pause';
+      } else {
+        audioPlayer.pause();
+        if (playBtn.querySelector('i')) playBtn.querySelector('i').className = 'fas fa-play';
+      }
+    };
+    audioPlayer.onplay = () => {
+      if (playBtn && playBtn.querySelector('i')) playBtn.querySelector('i').className = 'fas fa-pause';
+    };
+    audioPlayer.onpause = () => {
+      if (playBtn && playBtn.querySelector('i')) playBtn.querySelector('i').className = 'fas fa-play';
+    };
+    audioPlayer.onended = () => {
+      if (playBtn && playBtn.querySelector('i')) playBtn.querySelector('i').className = 'fas fa-play';
+    };
+  }
+}
+
+async function dismissAdminReport() {
+  if (!activeAdminReportId) return;
+
+  const item = reportedAudios.find(x => x.id === activeAdminReportId);
+  if (!item) return;
+
+  try {
+    const res = await fetch('/api/admin/reports/dismiss', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: item.id, audio_id: item.audio_id })
+    });
+
+    if (res.ok) {
+      showToast(`Đã từ chối báo cáo cho bản ghi "${item.title || item.audio_title}". Giữ lại bản ghi trên bản đồ.`, 'info');
+    }
+  } catch(e) {
+    console.warn("Error dismissing report:", e);
+  }
+
+  reportedAudios = reportedAudios.filter(x => x.id !== activeAdminReportId);
+  try {
+    let localReports = JSON.parse(localStorage.getItem('vb_reported_audios') || '[]');
+    localReports = localReports.filter(x => x.id !== activeAdminReportId && x.audio_id !== item.audio_id);
+    localStorage.setItem('vb_reported_audios', JSON.stringify(localReports));
+  } catch(e) {}
+
+  activeAdminReportId = null;
+  renderAdminReportList();
+}
+
+async function deleteAdminReportedAudio() {
+  if (!activeAdminReportId) return;
+
+  const item = reportedAudios.find(x => x.id === activeAdminReportId);
+  if (!item) return;
+
+  const displayTitle = item.title || item.audio_title || "Bản ghi âm";
+
+  if (confirm(`Bạn có chắc chắn muốn XÓA VĨNH VIỄN bản ghi âm "${displayTitle}" khỏi hệ thống và gỡ khỏi Bản đồ?`)) {
+    const targetAudioId = item.audio_id || item.id;
+
+    // 1. Add to local deleted IDs set
+    let deletedIds = [];
+    try {
+      deletedIds = JSON.parse(localStorage.getItem('vb_deleted_audio_ids') || '[]');
+    } catch(e) {}
+    if (targetAudioId && !deletedIds.includes(targetAudioId)) deletedIds.push(targetAudioId);
+    if (item.id && !deletedIds.includes(item.id)) deletedIds.push(item.id);
+    localStorage.setItem('vb_deleted_audio_ids', JSON.stringify(deletedIds));
+
+    // 2. Remove from localAudioCorpus & localStorage.vb_audio_corpus
+    localAudioCorpus = localAudioCorpus.filter(a => {
+      if (!a) return false;
+      if (a.id === targetAudioId || a.id === item.id) return false;
+      if (displayTitle && a.title && a.title.trim().toLowerCase() === displayTitle.trim().toLowerCase()) return false;
+      return true;
+    });
+    localStorage.setItem('vb_audio_corpus', JSON.stringify(localAudioCorpus));
+
+    // 3. Remove from reportedAudios & localStorage.vb_reported_audios
+    reportedAudios = reportedAudios.filter(x => x.id !== activeAdminReportId && x.audio_id !== targetAudioId);
+    try {
+      let localReports = JSON.parse(localStorage.getItem('vb_reported_audios') || '[]');
+      localReports = localReports.filter(x => x.id !== activeAdminReportId && x.audio_id !== targetAudioId);
+      localStorage.setItem('vb_reported_audios', JSON.stringify(localReports));
+    } catch(e) {}
+
+    // 4. Send API request to backend to delete permanently from disk & deleted_audios.json
+    try {
+      await fetch('/api/admin/delete-reported-audio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: item.id, audio_id: targetAudioId })
+      });
+      await fetch(`/api/admin/reports/${encodeURIComponent(targetAudioId)}`, {
+        method: 'DELETE'
+      }).catch(() => {});
+    } catch(e) {
+      console.warn("Error calling backend delete API:", e);
+    }
+
+    activeAdminReportId = null;
+
+    showToast(`Đã xóa vĩnh viễn bản ghi âm "${displayTitle}" khỏi hệ thống!`, 'success');
+
+    updateGlobalStats();
+    if (typeof drawMapMarkers === 'function') drawMapMarkers();
+    renderAdminReportList();
+  }
+}
 
 function initAdminModule() {
   const approveBtn = document.getElementById('admin-btn-approve');
@@ -2616,6 +3205,19 @@ function initAdminModule() {
       fetchPendingContributionsFromBackend();
     };
   }
+
+  const refreshReportsBtn = document.getElementById('btn-refresh-reports');
+  if (refreshReportsBtn) {
+    refreshReportsBtn.onclick = function() {
+      fetchReportedAudiosFromBackend();
+    };
+  }
+
+  const dismissReportBtn = document.getElementById('admin-report-btn-dismiss');
+  const deleteReportBtn = document.getElementById('admin-report-btn-delete');
+
+  if (dismissReportBtn) dismissReportBtn.addEventListener('click', dismissAdminReport);
+  if (deleteReportBtn) deleteReportBtn.addEventListener('click', deleteAdminReportedAudio);
 
   // Audio player & play toggle button
   const playBtn = document.getElementById('admin-play-btn');

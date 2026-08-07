@@ -52,6 +52,107 @@ let dialectLexicon = [];
 let audioCorpus = [];
 let chatbotRagDatabase = [];
 
+const AUDIO_DB_PATH = path.join(__dirname, 'audio_database.json');
+const REPORTED_DB_PATH = path.join(__dirname, 'reported_audios.json');
+const DELETED_DB_PATH = path.join(__dirname, 'deleted_audios.json');
+
+function getDeletedAudioIds() {
+  try {
+    if (fs.existsSync(DELETED_DB_PATH)) {
+      const content = fs.readFileSync(DELETED_DB_PATH, 'utf-8');
+      const list = JSON.parse(content || '[]');
+      if (Array.isArray(list)) return new Set(list);
+    }
+  } catch (e) {
+    console.error("Error reading deleted_audios.json:", e);
+  }
+  return new Set();
+}
+
+function markAudioAsDeleted(id) {
+  if (!id) return;
+  try {
+    const deletedSet = getDeletedAudioIds();
+    deletedSet.add(id);
+    fs.writeFileSync(DELETED_DB_PATH, JSON.stringify(Array.from(deletedSet), null, 2), 'utf-8');
+    console.log(`[Audio DB] Marked ID "${id}" as permanently deleted.`);
+  } catch (e) {
+    console.error("Error saving deleted_audios.json:", e);
+  }
+}
+
+function getReportedAudios() {
+  try {
+    if (!fs.existsSync(REPORTED_DB_PATH)) {
+      fs.writeFileSync(REPORTED_DB_PATH, '[]', 'utf-8');
+      console.log("[Report DB] Initialized reported_audios.json with []");
+      return [];
+    }
+    const content = fs.readFileSync(REPORTED_DB_PATH, 'utf-8');
+    const list = JSON.parse(content || '[]');
+    if (Array.isArray(list)) return list;
+  } catch (e) {
+    console.error("Error reading reported_audios.json:", e);
+  }
+  return [];
+}
+
+function saveReportedAudios(list) {
+  try {
+    fs.writeFileSync(REPORTED_DB_PATH, JSON.stringify(list, null, 2), 'utf-8');
+    return true;
+  } catch (e) {
+    console.error("Error writing reported_audios.json:", e);
+    return false;
+  }
+}
+
+function getAudioDatabase() {
+  try {
+    const deletedSet = getDeletedAudioIds();
+    if (fs.existsSync(AUDIO_DB_PATH)) {
+      const content = fs.readFileSync(AUDIO_DB_PATH, 'utf-8');
+      const list = JSON.parse(content || '[]');
+      if (Array.isArray(list)) {
+        return list.filter(item => item && item.id && !deletedSet.has(item.id));
+      }
+    }
+  } catch (e) {
+    console.error("Error reading audio_database.json:", e);
+  }
+  return [];
+}
+
+function saveRecordToAudioDatabase(record) {
+  try {
+    let list = getAudioDatabase();
+    const existingIndex = list.findIndex(item => item.id === record.id || (item.title === record.title && item.audioUrl && item.audioUrl === record.audioUrl));
+    if (existingIndex !== -1) {
+      list[existingIndex] = { ...list[existingIndex], ...record };
+    } else {
+      list.push(record);
+    }
+    fs.writeFileSync(AUDIO_DB_PATH, JSON.stringify(list, null, 2), 'utf-8');
+    console.log(`[Audio DB] Saved record "${record.title}" (ID: ${record.id}) to audio_database.json`);
+    return true;
+  } catch (e) {
+    console.error("Error writing to audio_database.json:", e);
+    return false;
+  }
+}
+
+function removeRecordFromAudioDatabase(id) {
+  if (!id) return;
+  try {
+    markAudioAsDeleted(id);
+    let list = getAudioDatabase();
+    const newList = list.filter(item => item.id !== id);
+    fs.writeFileSync(AUDIO_DB_PATH, JSON.stringify(newList, null, 2), 'utf-8');
+  } catch (e) {
+    console.error("Error removing record from audio_database.json:", e);
+  }
+}
+
 function loadDatabase() {
   try {
     const dataFilePath = path.join(__dirname, 'data.js');
@@ -66,6 +167,27 @@ function loadDatabase() {
       audioCorpus = sandbox.AUDIO_CORPUS || [];
       chatbotRagDatabase = sandbox.CHATBOT_RAG_DATABASE || [];
       console.log(`[Database] Loaded ${dialectLexicon.length} lexicon items.`);
+    }
+
+    const deletedSet = getDeletedAudioIds();
+
+    if (!fs.existsSync(AUDIO_DB_PATH)) {
+      const filteredCorpus = audioCorpus.filter(item => item && item.id && !deletedSet.has(item.id));
+      fs.writeFileSync(AUDIO_DB_PATH, JSON.stringify(filteredCorpus, null, 2), 'utf-8');
+      console.log(`[Audio DB] Initialized audio_database.json with ${filteredCorpus.length} records.`);
+    } else {
+      const currentDb = getAudioDatabase();
+      const existingIds = new Set(currentDb.map(item => item.id));
+      let added = false;
+      audioCorpus.forEach(item => {
+        if (item && item.id && !existingIds.has(item.id) && !deletedSet.has(item.id)) {
+          currentDb.push(item);
+          added = true;
+        }
+      });
+      if (added) {
+        fs.writeFileSync(AUDIO_DB_PATH, JSON.stringify(currentDb, null, 2), 'utf-8');
+      }
     }
   } catch (err) {
     console.error("Failed to load local database from data.js:", err);
@@ -748,6 +870,191 @@ ${contextBlock || '(Không có thông tin liên quan trực tiếp trong cơ s�
     return;
   }
 
+  // --- API ROUTE: GET /api/audio & /api/audio-database & /api/audio-records & /api/audio-corpus ---
+  if (req.method === 'GET' && (safeUrl === '/api/audio' || safeUrl === '/api/audio-database' || safeUrl === '/api/audio-records' || safeUrl === '/api/audio-corpus' || safeUrl === '/api/get-audio-database')) {
+    try {
+      const list = getAudioDatabase();
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify(list));
+    } catch (err) {
+      console.error("Error reading audio_database.json:", err);
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: 'Failed to read audio database' }));
+    }
+    return;
+  }
+
+  // --- API ROUTE: POST /api/report-audio ---
+  if (req.method === 'POST' && safeUrl === '/api/report-audio') {
+    readPostBody(req).then((body) => {
+      try {
+        const { audio_id, audio_title, title, reason, note, timestamp } = body;
+        const targetId = audio_id || body.id;
+        
+        if (!targetId) {
+          console.warn("[Report API] Warning: Missing audio_id in request body");
+          res.statusCode = 400;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify({ success: false, error: 'audio_id is required' }));
+          return;
+        }
+
+        const audioList = getAudioDatabase();
+        const targetAudio = audioList.find(a => a.id === targetId);
+
+        if (targetAudio) {
+          targetAudio.is_reported = true;
+          targetAudio.report_reason = reason || "Không phù hợp";
+          saveRecordToAudioDatabase(targetAudio);
+        }
+
+        const reports = getReportedAudios();
+        const recordTitle = audio_title || title || (targetAudio ? targetAudio.title : "Bản ghi âm");
+
+        const newReport = {
+          id: Date.now(),
+          audio_id: targetId,
+          audio_title: recordTitle,
+          title: recordTitle,
+          province: targetAudio ? targetAudio.province : (body.province || "Bắc Trung Bộ"),
+          speaker: targetAudio ? targetAudio.speaker : (body.speaker || "Ẩn danh"),
+          audioUrl: targetAudio ? targetAudio.audioUrl : (body.audioUrl || ""),
+          transcriptDialect: targetAudio ? targetAudio.transcriptDialect : "",
+          reason: reason || "Nội dung vi phạm / Không phù hợp",
+          note: note || "",
+          created_at: new Date().toISOString(),
+          timestamp: timestamp || new Date().toISOString(),
+          status: "pending_review"
+        };
+
+        const existingIdx = reports.findIndex(r => r.audio_id === targetId);
+        if (existingIdx !== -1) {
+          reports[existingIdx] = newReport;
+        } else {
+          reports.push(newReport);
+        }
+
+        saveReportedAudios(reports);
+        console.log(`[Report API] Saved report successfully for audio_id: ${targetId} (${recordTitle})`);
+
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.end(JSON.stringify({ success: true, message: 'Báo cáo thành công', report: newReport }));
+      } catch (err) {
+        console.error("[Report API Error] Failed to process report:", err);
+        res.statusCode = 500;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.end(JSON.stringify({ success: false, error: 'Internal Server Error while saving report' }));
+      }
+    }).catch(err => {
+      console.error("[Report API Error] Failed to read request body:", err);
+      res.statusCode = 400;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify({ success: false, error: 'Invalid request body' }));
+    });
+    return;
+  }
+
+  // --- API ROUTE: GET /api/admin/reports ---
+  if (req.method === 'GET' && (safeUrl === '/api/admin/reports' || safeUrl === '/api/reports')) {
+    try {
+      const reports = getReportedAudios();
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify(reports));
+    } catch (err) {
+      console.error("Error reading reported_audios.json:", err);
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: 'Failed to read reports' }));
+    }
+    return;
+  }
+
+  // --- API ROUTE: /api/admin/reports/dismiss ---
+  if (req.method === 'POST' && (safeUrl === '/api/admin/reports/dismiss' || safeUrl === '/api/admin/dismiss-report')) {
+    readPostBody(req).then((body) => {
+      const { id, audio_id } = body;
+      const targetAudioId = audio_id || id;
+      try {
+        let reports = getReportedAudios();
+        reports = reports.filter(r => r.id !== id && r.audio_id !== targetAudioId);
+        saveReportedAudios(reports);
+
+        if (targetAudioId) {
+          const audioList = getAudioDatabase();
+          const target = audioList.find(a => a.id === targetAudioId);
+          if (target) {
+            delete target.is_reported;
+            delete target.report_reason;
+            saveRecordToAudioDatabase(target);
+          }
+        }
+
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.end(JSON.stringify({ success: true, audio_id: targetAudioId }));
+      } catch (err) {
+        console.error("Failed to dismiss report:", err);
+        res.statusCode = 500;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: 'Failed to dismiss report' }));
+      }
+    });
+    return;
+  }
+
+  // --- API ROUTE: DELETE /api/admin/reports/:id & POST /api/admin/delete-reported-audio ---
+  if ((req.method === 'DELETE' && safeUrl.startsWith('/api/admin/reports/')) || (req.method === 'POST' && (safeUrl === '/api/admin/delete-reported-audio' || safeUrl === '/api/admin/delete-report'))) {
+    readPostBody(req).then((body) => {
+      let targetId = body ? (body.audio_id || body.id) : null;
+      if (!targetId && safeUrl.startsWith('/api/admin/reports/')) {
+        targetId = safeUrl.replace('/api/admin/reports/', '').trim();
+      }
+
+      if (!targetId) {
+        res.statusCode = 400;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: 'Target ID is required' }));
+        return;
+      }
+
+      try {
+        let reports = getReportedAudios();
+        const reportItem = reports.find(r => r.id === targetId || r.audio_id === targetId);
+        const actualAudioId = reportItem ? reportItem.audio_id : targetId;
+
+        reports = reports.filter(r => r.id !== targetId && r.audio_id !== actualAudioId);
+        saveReportedAudios(reports);
+
+        const audioList = getAudioDatabase();
+        const audioItem = audioList.find(a => a.id === actualAudioId || a.id === targetId);
+        removeRecordFromAudioDatabase(actualAudioId);
+        removeRecordFromAudioDatabase(targetId);
+
+        const fileUrl = audioItem ? audioItem.audioUrl : (reportItem ? reportItem.audioUrl : null);
+        if (fileUrl && fileUrl.startsWith('/uploads/')) {
+          const localPath = path.join(__dirname, fileUrl);
+          if (fs.existsSync(localPath)) {
+            try { fs.unlinkSync(localPath); console.log(`[Admin Delete] Deleted audio file: ${localPath}`); } catch(e) {}
+          }
+        }
+
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.end(JSON.stringify({ success: true, id: actualAudioId }));
+      } catch (err) {
+        console.error("Failed to delete reported audio:", err);
+        res.statusCode = 500;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: 'Failed to delete reported audio' }));
+      }
+    });
+    return;
+  }
+
   // --- API ROUTE: /api/add-audio ---
   if (req.method === 'POST' && safeUrl === '/api/add-audio') {
     readPostBody(req).then((body) => {
@@ -781,10 +1088,14 @@ ${contextBlock || '(Không có thông tin liên quan trực tiếp trong cơ s�
           end_time: Number(end_time) || 0,
           transcriptDialect: "Bản ghi từ YouTube (Chỉ phát âm thanh)",
           transcriptStandard: "Bản ghi từ YouTube (Chỉ phát âm thanh)",
+          subtitle: "Bản ghi từ YouTube (Chỉ phát âm thanh)",
           verified: true,
           confidence: 95,
-          tags: ["YouTube", province]
+          tags: ["YouTube", province],
+          timestamp: new Date().toISOString()
         };
+
+        saveRecordToAudioDatabase(newRecordObject);
 
         const serialized = JSON.stringify(newRecordObject, null, 2);
         const formatted = serialized.split('\n').map((line, idx) => idx === 0 ? line : '  ' + line).join('\n');
@@ -840,7 +1151,7 @@ ${contextBlock || '(Không có thông tin liên quan trực tiếp trong cơ s�
             mimeType = `audio/${ext}`;
             const base64Data = match[2];
             audioBuffer = Buffer.from(base64Data, 'base64');
-            const fileName = `speech_${Date.now()}.${ext}`;
+            const fileName = `audio_${Date.now()}.${ext}`;
             const filePath = path.join(uploadsDir, fileName);
             fs.writeFileSync(filePath, audioBuffer);
             savedAudioUrl = `/uploads/${fileName}`;
@@ -855,7 +1166,7 @@ ${contextBlock || '(Không có thông tin liên quan trực tiếp trong cơ s�
 
         // Call Groq Whisper API for REAL Speech-to-Text on the actual audio file
         if (audioBuffer && audioBuffer.length > 0) {
-          const transcribedText = await transcribeAudioWithGroq(audioBuffer, mimeType, `speech_${Date.now()}.${audioExt}`);
+          const transcribedText = await transcribeAudioWithGroq(audioBuffer, mimeType, `audio_${Date.now()}.${audioExt}`);
           if (transcribedText) {
             localSub = transcribedText;
             
@@ -872,7 +1183,7 @@ ${contextBlock || '(Không có thông tin liên quan trực tiếp trong cơ s�
         }
 
         const newRecord = {
-          id: "speech_" + Date.now(),
+          id: "audio_" + Date.now(),
           title: title.trim(),
           speaker: isAnonymous ? "Ẩn danh" : (speaker ? speaker.trim() : "Ẩn danh"),
           isAnonymous: Boolean(isAnonymous),
@@ -885,6 +1196,7 @@ ${contextBlock || '(Không có thông tin liên quan trực tiếp trong cơ s�
           audioUrl: savedAudioUrl,
           transcriptDialect: localSub,
           transcriptStandard: standardSub,
+          subtitle: localSub,
           ageAudEERING: `AI audEERING: Nhóm ${ageGroup}`,
           purityPercentage: `${purityPct}%`,
           verified: true,
@@ -892,6 +1204,8 @@ ${contextBlock || '(Không có thông tin liên quan trực tiếp trong cơ s�
           status: "pending",
           timestamp: new Date().toISOString()
         };
+
+        saveRecordToAudioDatabase(newRecord);
 
         const pendingPath = path.join(__dirname, 'pending_contributions.json');
         let pendingList = [];
@@ -920,8 +1234,8 @@ ${contextBlock || '(Không có thông tin liên quan trực tiếp trong cơ s�
     return;
   }
 
-  // --- API ROUTE: GET /api/pending-contributions ---
-  if (req.method === 'GET' && safeUrl === '/api/pending-contributions') {
+  // --- API ROUTE: GET /api/contributions & /api/pending-contributions ---
+  if (req.method === 'GET' && (safeUrl === '/api/contributions' || safeUrl === '/api/pending-contributions')) {
     try {
       const pendingPath = path.join(__dirname, 'pending_contributions.json');
       let pendingList = [];
@@ -963,7 +1277,7 @@ ${contextBlock || '(Không có thông tin liên quan trực tiếp trong cơ s�
         const dialectGroup = recordToApprove.province === "Thanh Hóa" ? "Thanh Hóa" : (recordToApprove.province === "Nghệ An" || recordToApprove.province === "Hà Tĩnh" ? "Nghệ Tĩnh" : "Bình Trị Thiên");
         
         const approvedRecordObject = {
-          id: recordToApprove.id || ("p_" + Date.now()),
+          id: recordToApprove.id || ("audio_" + Date.now()),
           title: recordToApprove.title,
           province: recordToApprove.province,
           dialectGroup: dialectGroup,
@@ -974,10 +1288,15 @@ ${contextBlock || '(Không có thông tin liên quan trực tiếp trong cơ s�
           audioUrl: recordToApprove.audioUrl || "",
           transcriptDialect: recordToApprove.transcriptDialect || "Giọng đọc đóng góp",
           transcriptStandard: recordToApprove.transcriptStandard || "Giọng đọc đóng góp",
+          subtitle: recordToApprove.transcriptDialect || "Giọng đọc đóng góp",
           verified: true,
+          status: "approved",
           confidence: recordToApprove.confidence || 95,
-          tags: [recordToApprove.topic ? recordToApprove.topic.split(' ')[0] : "Đóng góp", recordToApprove.province]
+          tags: [recordToApprove.topic ? recordToApprove.topic.split(' ')[0] : "Đóng góp", recordToApprove.province],
+          timestamp: recordToApprove.timestamp || new Date().toISOString()
         };
+
+        saveRecordToAudioDatabase(approvedRecordObject);
 
         const serialized = JSON.stringify(approvedRecordObject, null, 2);
         const formatted = serialized.split('\n').map((line, idx) => idx === 0 ? line : '  ' + line).join('\n');
@@ -1037,6 +1356,8 @@ ${contextBlock || '(Không có thông tin liên quan trực tiếp trong cơ s�
             }
           }
         }
+
+        removeRecordFromAudioDatabase(id);
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json; charset=utf-8');

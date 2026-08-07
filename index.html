@@ -298,6 +298,9 @@
                     <canvas class="waveform-canvas" id="player-waveform"></canvas>
                     <div class="player-time" id="track-time-lbl">00:00 / 00:00</div>
                   </div>
+                  <button class="btn btn-secondary" id="btn-report-playing-audio" onclick="reportCurrentPlayingAudio()" title="Báo cáo bản ghi âm đang phát" style="font-size: 11px; padding: 6px 10px; color: #ef4444; border-color: rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.1); border-radius: 6px; display: inline-flex; align-items: center; gap: 4px; font-weight: 600; white-space: nowrap;">
+                    <i class="fas fa-flag"></i> Báo cáo
+                  </button>
 
                 </div>
                 
@@ -740,93 +743,176 @@
         <!-- VIEW 6: ADMIN REVIEW PANEL -->
         <!-- ========================================== -->
         <div class="app-view" id="admin-view">
-          <div class="admin-grid">
-            
-            <div class="admin-sidebar">
-              <div style="margin-bottom: 14px;">
-                <button id="open-admin-upload-btn" class="btn btn-primary" style="width: 100%; padding: 10px 14px; border-radius: 8px; background: linear-gradient(135deg, #ff0000, #cc0000); border: none; color: #ffffff; font-weight: 600; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 12px rgba(255, 0, 0, 0.25); cursor: pointer;" title="Đăng tải nhanh bản ghi YouTube (nhúng embed YouTube)">
-                  <i class="fab fa-youtube" style="font-size: 16px;"></i> Đăng tải / Nhúng YouTube
-                </button>
-              </div>
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                <div style="font-weight: 700; font-size: 13px; text-transform: uppercase; color: var(--text-muted);"><i class="fas fa-hourglass-half"></i> Hàng đợi kiểm duyệt</div>
-                <button class="btn btn-secondary" id="btn-refresh-admin" style="font-size: 11px; padding: 4px 10px; border-radius: 6px;"><i class="fas fa-sync-alt"></i> Làm mới danh sách</button>
-              </div>
-              <div class="admin-list-container" id="admin-queue-list">
-                <!-- User contributed pending uploads loaded here -->
-              </div>
-            </div>
-
-            <!-- ADMIN RECORD DETAIL PANE -->
-            <div class="admin-detail-pane">
-              <div class="admin-detail-empty" id="admin-detail-empty">
-                <i class="fas fa-folder-open"></i>
-                <p>Chọn một bản ghi trong hàng đợi kiểm duyệt để kiểm tra kết quả AI và duyệt lên bản đồ chính.</p>
-              </div>
-
-              <div id="admin-detail-content" style="display: none; flex-direction: column; height: 100%;">
-                <div class="admin-detail-header" style="align-items: center; justify-content: space-between;">
-                  <div class="admin-detail-title">
-                    <h3 id="admin-detail-title-txt">Ghi âm đóng góp</h3>
-                    <p id="admin-detail-speaker">Người đóng góp: - | Tỉnh: -</p>
-                  </div>
-                  
-                  <div style="display: flex; align-items: center; gap: 12px;">
-                    <button class="btn btn-primary" id="admin-play-btn" style="border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 16px;">
-                      <i class="fas fa-play"></i>
-                    </button>
-                  </div>
-                </div>
-
-                <!-- Integrated Audio Player Control -->
-                <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; margin-bottom: 20px;">
-                  <div style="font-size: 12px; font-weight: 700; color: var(--color-primary); margin-bottom: 8px;">
-                    <i class="fas fa-volume-up"></i> Trình phát âm thanh kiểm duyệt (Audio Player)
-                  </div>
-                  <audio id="admin-audio-player" controls style="width: 100%; height: 40px; border-radius: 8px;"></audio>
-                </div>
-
-                <div class="admin-section-grid">
-                  <div class="admin-card-panel">
-                    <h4 class="dict-section-title"><i class="fas fa-robot"></i> Kết quả phân tích AI Pipeline</h4>
-                    <div class="admin-ai-badge-row" id="admin-ai-tags-row">
-                      <!-- AI Pilled tags -->
-                    </div>
-                  </div>
-                  <div class="admin-card-panel" style="background: rgba(255, 255, 255, 0.01);">
-                    <h4 class="dict-section-title"><i class="fas fa-shield-alt"></i> Quy tắc kiểm duyệt</h4>
-                    <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5;">Lắng nghe kỹ chất lượng thu âm. Nếu âm thanh chứa ngôn từ không phù hợp hoặc bị nhiễu quá nặng, hãy bấm <strong>Từ chối</strong>. Nếu hợp lệ, bấm <strong>Duyệt</strong> để chuyển vào CSDL chính.</p>
-                  </div>
-                </div>
-
-                <!-- Subtitle Box (Editable for Admin) -->
-                <div class="admin-card-panel" style="margin-bottom: 24px; background: rgba(15, 23, 42, 0.4); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <h4 class="dict-section-title" style="color: #38bdf8; margin: 0;"><i class="fas fa-closed-captioning"></i> Phụ đề song ngữ (Subtitles)</h4>
-                    <span style="font-size: 11px; color: #10b981; font-weight: 600; background: rgba(16, 185, 129, 0.15); padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.3);"><i class="fas fa-edit"></i> Admin nhấp vào ô để chỉnh sửa trực tiếp</span>
-                  </div>
-                  
-                  <div class="transcript-box" style="background: rgba(0,0,0,0.25); border-radius: 10px; padding: 14px;">
-                    <div class="transcript-line" style="margin-bottom: 14px;">
-                      <label for="admin-trans-dialect" style="font-weight: 700; color: #fbbf24; display: block; font-size: 12px; text-transform: uppercase; margin-bottom: 6px;">🗣 Sub giọng địa phương (Whisper STT AI - Có thể sửa):</label>
-                      <textarea class="form-control" id="admin-trans-dialect" rows="2" style="width: 100%; background: rgba(15, 23, 42, 0.9); color: #ffffff; border: 1px solid rgba(251, 191, 36, 0.4); border-radius: 8px; padding: 8px 12px; font-size: 14px; font-style: italic; resize: vertical;" placeholder="Nhập hoặc chỉnh sửa phụ đề giọng địa phương..."></textarea>
-                    </div>
-                    <div class="transcript-line standard" style="border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 12px;">
-                      <label for="admin-trans-standard" style="font-weight: 700; color: #34d399; display: block; font-size: 12px; text-transform: uppercase; margin-bottom: 6px;">🌐 Sub dịch Tiếng Phổ thông (RAG Dictionary - Có thể sửa):</label>
-                      <textarea class="form-control" id="admin-trans-standard" rows="2" style="width: 100%; background: rgba(15, 23, 42, 0.9); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.4); border-radius: 8px; padding: 8px 12px; font-size: 14px; font-weight: 500; resize: vertical;" placeholder="Nhập hoặc chỉnh sửa phụ đề dịch tiếng phổ thông..."></textarea>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Admin Action Buttons -->
-                <div class="admin-actions-row" style="display: flex; gap: 14px; justify-content: flex-end;">
-                  <button class="btn btn-secondary" id="admin-btn-reject" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.08); font-weight: 600; padding: 10px 20px;"><i class="fas fa-times-circle"></i> Từ chối</button>
-                  <button class="btn btn-primary" id="admin-btn-approve" style="background: #10b981; color: #fff; border-color: #10b981; box-shadow: 0 0 12px rgba(16, 185, 129, 0.35); font-weight: 700; padding: 10px 24px;"><i class="fas fa-check-circle"></i> Duyệt (Chuyển CSDL chính)</button>
-                </div>
-              </div>
-            </div>
-
+          
+          <!-- Admin Sub-Navigation Tabs -->
+          <div class="admin-subtab-bar" style="display: flex; gap: 12px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+            <button class="admin-subtab-btn active" id="tab-btn-pending" onclick="switchAdminSubTab('pending')" style="background: rgba(14, 165, 233, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+              <i class="fas fa-hourglass-half"></i> 📋 Hàng đợi kiểm duyệt
+            </button>
+            <button class="admin-subtab-btn" id="tab-btn-reports" onclick="switchAdminSubTab('reports')" style="background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+              <i class="fas fa-flag"></i> 🚩 Danh sách Báo cáo Vi phạm
+            </button>
           </div>
+
+          <!-- SUB-VIEW 1: PENDING CONTRIBUTIONS QUEUE -->
+          <div id="admin-pending-section">
+            <div class="admin-grid">
+              
+              <div class="admin-sidebar">
+                <div style="margin-bottom: 14px;">
+                  <button id="open-admin-upload-btn" class="btn btn-primary" style="width: 100%; padding: 10px 14px; border-radius: 8px; background: linear-gradient(135deg, #ff0000, #cc0000); border: none; color: #ffffff; font-weight: 600; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 12px rgba(255, 0, 0, 0.25); cursor: pointer;" title="Đăng tải nhanh bản ghi YouTube (nhúng embed YouTube)">
+                    <i class="fab fa-youtube" style="font-size: 16px;"></i> Đăng tải / Nhúng YouTube
+                  </button>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                  <div style="font-weight: 700; font-size: 13px; text-transform: uppercase; color: var(--text-muted);"><i class="fas fa-hourglass-half"></i> Hàng đợi kiểm duyệt</div>
+                  <button class="btn btn-secondary" id="btn-refresh-admin" style="font-size: 11px; padding: 4px 10px; border-radius: 6px;"><i class="fas fa-sync-alt"></i> Làm mới danh sách</button>
+                </div>
+                <div class="admin-list-container" id="admin-queue-list">
+                  <!-- User contributed pending uploads loaded here -->
+                </div>
+              </div>
+
+              <!-- ADMIN RECORD DETAIL PANE -->
+              <div class="admin-detail-pane">
+                <div class="admin-detail-empty" id="admin-detail-empty">
+                  <i class="fas fa-folder-open"></i>
+                  <p>Chọn một bản ghi trong hàng đợi kiểm duyệt để kiểm tra kết quả AI và duyệt lên bản đồ chính.</p>
+                </div>
+
+                <div id="admin-detail-content" style="display: none; flex-direction: column; height: 100%;">
+                  <div class="admin-detail-header" style="align-items: center; justify-content: space-between;">
+                    <div class="admin-detail-title">
+                      <h3 id="admin-detail-title-txt">Ghi âm đóng góp</h3>
+                      <p id="admin-detail-speaker">Người đóng góp: - | Tỉnh: -</p>
+                    </div>
+                    
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                      <button class="btn btn-primary" id="admin-play-btn" style="border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 16px;">
+                        <i class="fas fa-play"></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Integrated Audio Player Control -->
+                  <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; margin-bottom: 20px;">
+                    <div style="font-size: 12px; font-weight: 700; color: var(--color-primary); margin-bottom: 8px;">
+                      <i class="fas fa-volume-up"></i> Trình phát âm thanh kiểm duyệt (Audio Player)
+                    </div>
+                    <audio id="admin-audio-player" controls style="width: 100%; height: 40px; border-radius: 8px;"></audio>
+                  </div>
+
+                  <div class="admin-section-grid">
+                    <div class="admin-card-panel">
+                      <h4 class="dict-section-title"><i class="fas fa-robot"></i> Kết quả phân tích AI Pipeline</h4>
+                      <div class="admin-ai-badge-row" id="admin-ai-tags-row">
+                        <!-- AI Pilled tags -->
+                      </div>
+                    </div>
+                    <div class="admin-card-panel" style="background: rgba(255, 255, 255, 0.01);">
+                      <h4 class="dict-section-title"><i class="fas fa-shield-alt"></i> Quy tắc kiểm duyệt</h4>
+                      <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5;">Lắng nghe kỹ chất lượng thu âm. Nếu âm thanh chứa ngôn từ không phù hợp hoặc bị nhiễu quá nặng, hãy bấm <strong>Từ chối</strong>. Nếu hợp lệ, bấm <strong>Duyệt</strong> để chuyển vào CSDL chính.</p>
+                    </div>
+                  </div>
+
+                  <!-- Subtitle Box (Editable for Admin) -->
+                  <div class="admin-card-panel" style="margin-bottom: 24px; background: rgba(15, 23, 42, 0.4); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                      <h4 class="dict-section-title" style="color: #38bdf8; margin: 0;"><i class="fas fa-closed-captioning"></i> Phụ đề song ngữ (Subtitles)</h4>
+                      <span style="font-size: 11px; color: #10b981; font-weight: 600; background: rgba(16, 185, 129, 0.15); padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.3);"><i class="fas fa-edit"></i> Admin nhấp vào ô để chỉnh sửa trực tiếp</span>
+                    </div>
+                    
+                    <div class="transcript-box" style="background: rgba(0,0,0,0.25); border-radius: 10px; padding: 14px;">
+                      <div class="transcript-line" style="margin-bottom: 14px;">
+                        <label for="admin-trans-dialect" style="font-weight: 700; color: #fbbf24; display: block; font-size: 12px; text-transform: uppercase; margin-bottom: 6px;">🗣 Sub giọng địa phương (Whisper STT AI - Có thể sửa):</label>
+                        <textarea class="form-control" id="admin-trans-dialect" rows="2" style="width: 100%; background: rgba(15, 23, 42, 0.9); color: #ffffff; border: 1px solid rgba(251, 191, 36, 0.4); border-radius: 8px; padding: 8px 12px; font-size: 14px; font-style: italic; resize: vertical;" placeholder="Nhập hoặc chỉnh sửa phụ đề giọng địa phương..."></textarea>
+                      </div>
+                      <div class="transcript-line standard" style="border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 12px;">
+                        <label for="admin-trans-standard" style="font-weight: 700; color: #34d399; display: block; font-size: 12px; text-transform: uppercase; margin-bottom: 6px;">🌐 Sub dịch Tiếng Phổ thông (RAG Dictionary - Có thể sửa):</label>
+                        <textarea class="form-control" id="admin-trans-standard" rows="2" style="width: 100%; background: rgba(15, 23, 42, 0.9); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.4); border-radius: 8px; padding: 8px 12px; font-size: 14px; font-weight: 500; resize: vertical;" placeholder="Nhập hoặc chỉnh sửa phụ đề dịch tiếng phổ thông..."></textarea>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Admin Action Buttons -->
+                  <div class="admin-actions-row" style="display: flex; gap: 14px; justify-content: flex-end;">
+                    <button class="btn btn-secondary" id="admin-btn-reject" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.08); font-weight: 600; padding: 10px 20px;"><i class="fas fa-times-circle"></i> Từ chối</button>
+                    <button class="btn btn-primary" id="admin-btn-approve" style="background: #10b981; color: #fff; border-color: #10b981; box-shadow: 0 0 12px rgba(16, 185, 129, 0.35); font-weight: 700; padding: 10px 24px;"><i class="fas fa-check-circle"></i> Duyệt (Chuyển CSDL chính)</button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- SUB-VIEW 2: REPORTED VIOLATIONS LIST -->
+          <div id="admin-reports-section" style="display: none;">
+            <div class="admin-grid">
+              
+              <div class="admin-sidebar">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                  <div style="font-weight: 700; font-size: 13px; text-transform: uppercase; color: #ef4444;"><i class="fas fa-flag"></i> Danh sách Báo cáo Vi phạm</div>
+                  <button class="btn btn-secondary" id="btn-refresh-reports" style="font-size: 11px; padding: 4px 10px; border-radius: 6px;"><i class="fas fa-sync-alt"></i> Làm mới</button>
+                </div>
+                <div class="admin-list-container" id="admin-reports-list">
+                  <!-- Reported items loaded here -->
+                </div>
+              </div>
+
+              <!-- REPORT RECORD DETAIL PANE -->
+              <div class="admin-detail-pane">
+                <div class="admin-detail-empty" id="admin-report-detail-empty">
+                  <i class="fas fa-flag" style="color: #ef4444; font-size: 48px; margin-bottom: 12px;"></i>
+                  <p>Chọn một bản ghi trong danh sách báo cáo vi phạm để kiểm tra âm thanh và xử lý.</p>
+                </div>
+
+                <div id="admin-report-detail-content" style="display: none; flex-direction: column; height: 100%;">
+                  <div class="admin-detail-header" style="align-items: center; justify-content: space-between;">
+                    <div class="admin-detail-title">
+                      <h3 id="admin-report-title-txt">Bản ghi bị báo cáo</h3>
+                      <p id="admin-report-speaker-txt">Người đóng góp: - | Tỉnh: -</p>
+                    </div>
+                    
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                      <button class="btn btn-primary" id="admin-report-play-btn" style="border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 16px; background: #ef4444; border-color: #ef4444;">
+                        <i class="fas fa-play"></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Integrated Audio Player Control for Reports -->
+                  <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; margin-bottom: 20px;">
+                    <div style="font-size: 12px; font-weight: 700; color: #ef4444; margin-bottom: 8px;">
+                      <i class="fas fa-volume-up"></i> Trình phát âm thanh kiểm tra vi phạm (Audio Player)
+                    </div>
+                    <audio id="admin-report-audio-player" controls style="width: 100%; height: 40px; border-radius: 8px;"></audio>
+                  </div>
+
+                  <!-- Report Details Box -->
+                  <div class="admin-card-panel" style="background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 12px; padding: 18px; margin-bottom: 20px;">
+                    <h4 class="dict-section-title" style="color: #dc2626; margin-top: 0; font-size: 15px; font-weight: 700;"><i class="fas fa-exclamation-triangle"></i> Chi tiết Báo cáo Vi phạm từ Người dùng</h4>
+                    <div style="font-size: 13px; color: var(--text-main, #0f172a); margin-bottom: 10px; font-weight: 600;">
+                      <strong style="color: var(--text-main, #0f172a);">Lý do chọn nhanh:</strong> <span id="admin-report-reason-txt" style="color: #dc2626; font-weight: 700; font-size: 14px; margin-left: 4px;">-</span>
+                    </div>
+                    <div style="font-size: 13px; color: var(--text-main, #0f172a); margin-bottom: 10px;">
+                      <strong style="color: var(--text-main, #0f172a);">Mô tả chi tiết từ người dùng:</strong> <span id="admin-report-note-txt" style="font-style: italic; color: var(--text-main, #334155); font-weight: 500; display: block; margin-top: 4px; background: rgba(0,0,0,0.04); padding: 8px 12px; border-radius: 6px; border: 1px dashed rgba(0,0,0,0.1);">-</span>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-muted, #475569); font-weight: 500;">
+                      Thời gian báo cáo: <span id="admin-report-time-txt" style="font-weight: 600; color: var(--text-main, #1e293b);">-</span>
+                    </div>
+                  </div>
+
+                  <!-- Admin Action Buttons for Reports -->
+                  <div class="admin-actions-row" style="display: flex; gap: 14px; justify-content: flex-end; margin-top: auto;">
+                    <button class="btn btn-secondary" id="admin-report-btn-dismiss" style="color: #38bdf8; border-color: rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.08); font-weight: 600; padding: 10px 20px;"><i class="fas fa-times"></i> ❌ Từ chối Báo cáo (Giữ bản ghi)</button>
+                    <button class="btn btn-primary" id="admin-report-btn-delete" style="background: #ef4444; color: #fff; border-color: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.35); font-weight: 700; padding: 10px 24px;"><i class="fas fa-trash-alt"></i> 🗑️ Xóa Bản Ghi Âm (Gỡ hoàn toàn)</button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
         </div>
 
       </section>
@@ -1152,6 +1238,60 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" id="btn-cancel-yt-upload">Hủy bỏ</button>
         <button class="btn btn-primary" id="btn-submit-yt-upload">Lưu bản ghi</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: REPORT AUDIO VIOLATION -->
+  <!-- ========================================== -->
+  <div class="modal-overlay" id="report-audio-modal" style="z-index: 120;">
+    <div class="modal-card" style="max-width: 480px; background: #0f172a; border-radius: 16px; border: 1px solid var(--border-color);">
+      <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px;">
+        <h3 style="font-size: 16px; color: #ef4444;"><i class="fas fa-flag" style="color: #ef4444; margin-right: 6px;"></i> Báo Cáo Bản Ghi Âm Vi Phạm</h3>
+        <button class="close-modal" id="close-report-modal-btn">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 18px 20px;">
+        <div style="background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 16px;">
+          <span style="font-size: 12px; color: var(--text-muted);">Tên bản ghi âm:</span>
+          <strong id="report-modal-audio-title" style="color: #38bdf8; display: block; font-size: 14px; margin-top: 2px;">-</strong>
+        </div>
+
+        <form id="report-audio-form" onsubmit="return false;">
+          <input type="hidden" id="report-audio-id" value="" />
+          
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label style="font-weight: 700; font-size: 13px; color: #ffffff; margin-bottom: 10px; display: block;">Chọn lý do báo cáo vi phạm *</label>
+            
+            <div class="report-reasons-list" style="display: flex; flex-direction: column; gap: 8px;">
+              <label class="radio-reason-label" style="display: flex; align-items: center; gap: 10px; font-size: 13px; cursor: pointer; background: rgba(15, 23, 42, 0.8); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); color: #e2e8f0;">
+                <input type="radio" name="report-reason" value="Sai vị trí tỉnh/thành" checked />
+                <span>📍 Sai vị trí tỉnh/thành</span>
+              </label>
+              <label class="radio-reason-label" style="display: flex; align-items: center; gap: 10px; font-size: 13px; cursor: pointer; background: rgba(15, 23, 42, 0.8); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); color: #e2e8f0;">
+                <input type="radio" name="report-reason" value="Âm thanh hỏng / Không có tiếng" />
+                <span>🔇 Âm thanh hỏng / Không có tiếng</span>
+              </label>
+              <label class="radio-reason-label" style="display: flex; align-items: center; gap: 10px; font-size: 13px; cursor: pointer; background: rgba(15, 23, 42, 0.8); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); color: #e2e8f0;">
+                <input type="radio" name="report-reason" value="Nội dung vi phạm / Không phù hợp" />
+                <span>⚠️ Nội dung vi phạm / Không phù hợp</span>
+              </label>
+              <label class="radio-reason-label" style="display: flex; align-items: center; gap: 10px; font-size: 13px; cursor: pointer; background: rgba(15, 23, 42, 0.8); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); color: #e2e8f0;">
+                <input type="radio" name="report-reason" value="Lý do khác" />
+                <span>💬 Lý do khác</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="report-note" style="font-size: 12px; color: #9ca3af; margin-bottom: 6px; display: block;">Mô tả chi tiết bổ sung (tùy chọn)</label>
+            <textarea class="form-control" id="report-note" rows="3" placeholder="Nhập thêm mô tả chi tiết phản hồi cho Ban quản trị..." style="width: 100%; background: #070a14; color: #ffffff; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 10px 12px; font-size: 13px; resize: vertical;"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer" style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px; gap: 10px; justify-content: flex-end;">
+        <button class="btn btn-secondary" id="btn-cancel-report" style="font-size: 13px; padding: 8px 16px;">Hủy</button>
+        <button class="btn btn-primary" id="btn-submit-report" style="background: #ef4444; border-color: #ef4444; font-size: 13px; font-weight: 700; padding: 8px 18px;"><i class="fas fa-paper-plane"></i> Gửi Báo Cáo</button>
       </div>
     </div>
   </div>

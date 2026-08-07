@@ -4971,6 +4971,63 @@ const DIALECT_LEXICON = [
 // Nhãn chủ đề gồm: "Lịch sử & Văn hóa", "Giọng ca đặc trưng (Ví Giặm, Ca Huế...)", "Tổng quan vùng (Địa lý, Đời sống...)"
 const AUDIO_CORPUS = [
   {
+    "id": "speech_1786076763715",
+    "title": "xứ huế quê tôi",
+    "province": "Thừa Thiên Huế",
+    "dialectGroup": "Bình Trị Thiên",
+    "speaker": "Ẩn danh",
+    "ageGroup": "18-35",
+    "gender": "Nam",
+    "topic": "Lịch sử văn hóa",
+    "audioUrl": "/uploads/speech_1786076762828.ogg",
+    "transcriptDialect": "Huy là quê hương của tôi, nơi đấy có nhiều cảnh đẹp, có người chân chất và có dòng nổi rất riêng. Tôi muốn gọi một phân nhò để lưu giữ tình nổi của quê mình.",
+    "transcriptStandard": "Huy là quê hương của tôi, nơi đấy có nhiều cảnh đẹp, có người chân chất và có dòng nổi rất riêng. Tôi muốn gọi một phân nhò để lưu giữ tình nổi của quê mình.",
+    "verified": true,
+    "confidence": 92,
+    "tags": [
+      "Lịch",
+      "Thừa Thiên Huế"
+    ]
+  },
+  {
+    "id": "speech_1786076416660",
+    "title": "xứ huế quê tôi",
+    "province": "Thừa Thiên Huế",
+    "dialectGroup": "Bình Trị Thiên",
+    "speaker": "Ẩn danh",
+    "ageGroup": "18-35",
+    "gender": "Nam",
+    "topic": "Tổng quan vùng",
+    "audioUrl": "/uploads/speech_1786076415886.ogg",
+    "transcriptDialect": "Huy là quê hương của tôi, nơi đấy có nhiều cảnh đẹp, có người chân chất và có dòng nổi rất riêng. Tôi muốn gọi một phân nhò để lưu giữ tình nổi của quê mình.",
+    "transcriptStandard": "Huy là quê hương của tôi, nơi đấy có nhiều cảnh đẹp, có người chân chất và có dòng nổi rất riêng. Tôi muốn gọi một phân nhò để lưu giữ tình nổi của quê mình.",
+    "verified": true,
+    "confidence": 95,
+    "tags": [
+      "Tổng",
+      "Thừa Thiên Huế"
+    ]
+  },
+  {
+    "id": "speech_1786075834677",
+    "title": "XỨ HUẾ QUÊ TÔI",
+    "province": "Thừa Thiên Huế",
+    "dialectGroup": "Bình Trị Thiên",
+    "speaker": "Ẩn danh",
+    "ageGroup": "18-35",
+    "gender": "Nam",
+    "topic": "Tổng quan vùng",
+    "audioUrl": "/uploads/speech_1786075833675.ogg",
+    "transcriptDialect": "Huy là quê hương của tôi, nơi đấy có nhiều cảnh đẹp, có người chân chất và có dòng nổi rất riêng. Tôi muốn gọi một phân nhò để lưu giữ tình nổi của quê mình.",
+    "transcriptStandard": "Huy là quê hương của tôi, nơi đấy có nhiều cảnh đẹp, có người chân chất và có dòng nổi rất riêng. Tôi muốn gọi một phân nhò để lưu giữ tình nổi của quê mình.",
+    "verified": true,
+    "confidence": 90,
+    "tags": [
+      "Tổng",
+      "Thừa Thiên Huế"
+    ]
+  },
+  {
     "id": "yt_1785982902246",
     "title": "Giọng nói Quảng Trị - Đinh Thanh Hải 02",
     "province": "Thanh Hóa",
