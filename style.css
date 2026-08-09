@@ -3542,3 +3542,472 @@ button, input, select, textarea {
   border-color: rgba(255, 255, 255, 0.5);
   box-shadow: 0 12px 30px rgba(16, 185, 129, 0.55), 0 4px 10px rgba(0, 0, 0, 0.25);
 }
+
+/* ==========================================================================
+   COMPREHENSIVE MOBILE RESPONSIVE DESIGN (RWD) STANDARDS
+   ========================================================================== */
+
+/* Standard 1: Overflow-X Elimination for Body and Root Containers */
+html, body {
+  overflow-x: hidden !important;
+  width: 100% !important;
+  max-width: 100vw !important;
+  position: relative;
+}
+
+.app-container, .main-content, .view-container, .app-view {
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+}
+
+/* Wide Data Tables & Scroll Containers */
+.table-responsive, .overflow-x-auto, .dict-list-container, .admin-list-container, .audio-list, .side-panel-content, .breakdown-grid {
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Standard 2, 3 & 4: Mobile Breakpoints (width <= 768px) */
+@media screen and (max-width: 768px) {
+
+  /* ----------------------------------------------------
+     1. STICKY NAVBAR MOBILE OPTIMIZATION
+     ---------------------------------------------------- */
+  .sticky-navbar {
+    height: auto !important;
+    padding: 8px 12px !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+
+  .navbar-brand {
+    justify-content: center !important;
+  }
+
+  .navbar-menu {
+    display: flex !important;
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+    padding-bottom: 4px !important;
+    gap: 6px !important;
+    width: 100% !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .navbar-menu::-webkit-scrollbar {
+    display: none;
+  }
+
+  .navbar-link {
+    padding: 6px 12px !important;
+    font-size: 12px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .header-stats {
+    display: none !important;
+  }
+
+  .main-content {
+    height: auto !important;
+    min-height: calc(100vh - 100px) !important;
+    overflow-y: auto !important;
+  }
+
+  .view-container {
+    padding: 12px 8px !important;
+    height: auto !important;
+    overflow-y: auto !important;
+  }
+
+  .app-view {
+    height: auto !important;
+  }
+
+  /* ----------------------------------------------------
+     2. SINGLE COLUMN LAYOUTS (HOMEPAGE, MAP, DICT, TRANS, CHAT, ADMIN)
+     ---------------------------------------------------- */
+  
+  /* Hero Section & Features */
+  .hero-section {
+    grid-template-columns: 1fr !important;
+    gap: 24px !important;
+    padding: 24px 12px !important;
+    text-align: center !important;
+  }
+
+  .hero-headline {
+    font-size: 24px !important;
+    line-height: 1.3 !important;
+  }
+
+  .hero-desc {
+    font-size: 13.5px !important;
+  }
+
+  .benefits-box {
+    text-align: left !important;
+  }
+
+  .features-section {
+    padding: 32px 12px !important;
+  }
+
+  .features-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  /* Map View Layout */
+  .map-view-layout {
+    grid-template-columns: 1fr !important;
+    display: flex !important;
+    flex-direction: column !important;
+    height: auto !important;
+    gap: 16px !important;
+  }
+
+  .map-pane {
+    height: auto !important;
+    width: 100% !important;
+  }
+
+  /* Map Height Adjustment on Mobile (350px - 400px) */
+  #geojson-map-container, .map-wrapper {
+    height: 380px !important;
+    min-height: 350px !important;
+    max-height: 400px !important;
+    width: 100% !important;
+    border-radius: 14px !important;
+  }
+
+  .map-controls {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+
+  .map-filters {
+    flex-direction: column !important;
+    width: 100% !important;
+    gap: 8px !important;
+  }
+
+  .filter-select {
+    width: 100% !important;
+    font-size: 13px !important;
+  }
+
+  .fab-contrib {
+    top: 10px !important;
+    right: 10px !important;
+    padding: 0 12px !important;
+    height: 36px !important;
+    font-size: 11px !important;
+  }
+
+  .fab-contrib span {
+    font-size: 11px !important;
+  }
+
+  /* Side Detail Panel & Audio List */
+  .side-panel {
+    height: auto !important;
+    width: 100% !important;
+    border-radius: 14px !important;
+  }
+
+  .side-panel-stats {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+
+  .side-panel-content {
+    max-height: 350px !important;
+    overflow-y: auto !important;
+    padding: 12px !important;
+  }
+
+  /* Audio Player Frame Spans 100% Width */
+  .audio-player-panel {
+    width: 100% !important;
+    padding: 14px 12px !important;
+  }
+
+  .player-controls {
+    flex-direction: column !important;
+    gap: 12px !important;
+    align-items: stretch !important;
+  }
+
+  .play-pause-btn {
+    align-self: center !important;
+    min-width: 48px !important;
+    min-height: 48px !important;
+  }
+
+  .player-track-info {
+    width: 100% !important;
+  }
+
+  #btn-report-playing-audio {
+    align-self: center !important;
+    margin-top: 4px !important;
+    padding: 8px 16px !important;
+    font-size: 12px !important;
+    min-height: 40px !important;
+  }
+
+  /* Dictionary View Layout */
+  #dictionary-view.active {
+    height: auto !important;
+  }
+
+  .dictionary-container {
+    height: auto !important;
+    overflow: visible !important;
+    gap: 16px !important;
+  }
+
+  .dict-region-cards {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .dictionary-grid {
+    grid-template-columns: 1fr !important;
+    height: auto !important;
+    overflow: visible !important;
+    gap: 16px !important;
+  }
+
+  .dict-sidebar {
+    height: auto !important;
+    max-height: 380px !important;
+  }
+
+  .dict-list-container {
+    max-height: 280px !important;
+    overflow-y: auto !important;
+  }
+
+  .dict-detail-pane {
+    height: auto !important;
+    padding: 16px !important;
+    border-radius: 14px !important;
+  }
+
+  .dict-detail-word {
+    font-size: 24px !important;
+  }
+
+  /* Translator View Layout */
+  .translator-container {
+    width: 100% !important;
+    gap: 16px !important;
+  }
+
+  .translator-io-box {
+    grid-template-columns: 1fr !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+
+  .textarea-wrap {
+    width: 100% !important;
+    height: 160px !important;
+    padding: 14px !important;
+  }
+
+  .swap-languages-btn {
+    align-self: center !important;
+    transform: rotate(90deg) !important;
+    margin: 4px 0 !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+
+  .translator-presets-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 6px !important;
+  }
+
+  .translator-actions {
+    flex-direction: column !important;
+    gap: 12px !important;
+    align-items: stretch !important;
+  }
+
+  #btn-trigger-translate {
+    width: 100% !important;
+    justify-content: center !important;
+    min-height: 48px !important;
+    font-size: 15px !important;
+  }
+
+  .breakdown-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  /* Chatbot View Layout */
+  .chatbot-container {
+    grid-template-columns: 1fr !important;
+    height: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+
+  .chatbot-sidebar {
+    height: auto !important;
+    padding: 14px !important;
+  }
+
+  .quick-queries-list {
+    max-height: 140px !important;
+    overflow-y: auto !important;
+  }
+
+  .chatbot-main {
+    height: 480px !important;
+    border-radius: 14px !important;
+  }
+
+  .chat-messages {
+    padding: 14px !important;
+  }
+
+  .chat-bubble {
+    max-width: 90% !important;
+    font-size: 13.5px !important;
+    padding: 12px 14px !important;
+  }
+
+  .chat-input-bar {
+    padding: 10px 12px !important;
+    gap: 8px !important;
+  }
+
+  .chat-send-btn {
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+
+  /* Admin View Layout */
+  .admin-subtab-bar {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  .admin-grid {
+    grid-template-columns: 1fr !important;
+    height: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+
+  .admin-sidebar {
+    height: auto !important;
+  }
+
+  .admin-list-container {
+    max-height: 280px !important;
+    overflow-y: auto !important;
+  }
+
+  .admin-detail-pane {
+    height: auto !important;
+    padding: 14px !important;
+  }
+
+  .admin-section-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .admin-actions-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .admin-actions-row .btn {
+    width: 100% !important;
+    justify-content: center !important;
+    min-height: 44px !important;
+  }
+
+  /* ----------------------------------------------------
+     3. OPTIMIZE POPUP MODALS & TOUCH TARGETS
+     ---------------------------------------------------- */
+  .modal-card, .mg-modal-card {
+    width: 92% !important;
+    max-width: 92% !important;
+    max-height: 85vh !important;
+    overflow-y: auto !important;
+    margin: 12px auto !important;
+    border-radius: 16px !important;
+    padding: 16px !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .modal-body {
+    padding: 14px 10px !important;
+    max-height: calc(85vh - 120px) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+
+  .province-popup-card {
+    width: 92% !important;
+    max-width: 92% !important;
+    max-height: 85vh !important;
+    overflow-y: auto !important;
+    padding: 16px !important;
+    border-radius: 16px !important;
+  }
+
+  /* Enhanced Touch Target Sizes for Finger Tap Ergonomics */
+  .btn, button, .feature-btn, .btn-popup-action, .btn-mg-play, .btn-mg-submit-start, .play-pause-btn, .close-modal, .close-popup-btn, .preset-tag-btn, .quick-query-btn, .quick-reply-suggestion-btn, .admin-subtab-btn {
+    min-height: 44px !important;
+    touch-action: manipulation;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .audio-card {
+    padding: 14px 16px !important;
+    min-height: 54px !important;
+  }
+
+  .audio-card-meta {
+    font-size: 11.5px !important;
+  }
+
+  .audio-card-title {
+    font-size: 14px !important;
+  }
+
+  /* Footer on mobile */
+  .app-footer {
+    padding: 32px 16px 24px 16px !important;
+  }
+
+  .footer-desc {
+    font-size: 11.5px !important;
+  }
+}
+

@@ -1040,3 +1040,110 @@
   0% { transform: scale(0.92); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
 }
+
+/* Mobile Responsive Optimizations for Minigames (<= 768px) */
+@media screen and (max-width: 768px) {
+  .minigame-wrapper {
+    padding: 10px 8px !important;
+  }
+
+  .mg-hub-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 14px !important;
+    padding: 18px 16px !important;
+  }
+
+  .mg-hub-header h2 {
+    font-size: 20px !important;
+  }
+
+  .btn-mg-leaderboard {
+    width: 100% !important;
+    justify-content: center !important;
+    min-height: 44px !important;
+  }
+
+  .mg-cards-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  .mg-card {
+    padding: 18px !important;
+  }
+
+  .mg-arena {
+    padding: 16px 12px !important;
+    border-radius: 16px !important;
+  }
+
+  .mg-arena-topbar {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+  }
+
+  .mg-arena-stats {
+    width: 100% !important;
+    justify-content: space-between !important;
+  }
+
+  .mg-options-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .btn-mg-choice {
+    padding: 14px 16px !important;
+    min-height: 50px !important;
+    font-size: 14px !important;
+  }
+
+  .mg-matching-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  .mg-match-card {
+    min-height: 50px !important;
+    font-size: 14px !important;
+    padding: 12px 14px !important;
+  }
+
+  .mg-word-slots {
+    gap: 6px !important;
+  }
+
+  .mg-letter-box {
+    width: 40px !important;
+    height: 46px !important;
+    font-size: 18px !important;
+  }
+
+  .btn-mg-key {
+    min-width: 32px !important;
+    padding: 8px 6px !important;
+    font-size: 13px !important;
+    min-height: 40px !important;
+  }
+
+  .mg-modal-card {
+    width: 92% !important;
+    max-width: 92% !important;
+    max-height: 85vh !important;
+    overflow-y: auto !important;
+    padding: 20px 16px !important;
+    margin: 12px auto !important;
+  }
+
+  .mg-result-scores {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  .btn-mg-submit-start {
+    min-height: 48px !important;
+  }
+}
+
