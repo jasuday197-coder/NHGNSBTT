@@ -162,39 +162,51 @@ function initData() {
   }
 
   fetchAudioDatabaseFromBackend();
+  fetchLexiconFromBackend();
 }
 
+/**
+ * MySQL là nguồn sự thật duy nhất: danh sách trả về từ server THAY THẾ
+ * bản trong localStorage, không hợp nhất. Nhờ vậy bản ghi bị admin xoá
+ * hoặc từ chối sẽ biến mất thật, thay vì sống lại từ cache của trình duyệt.
+ */
 async function fetchAudioDatabaseFromBackend() {
-  const storedDeletedIds = localStorage.getItem('vb_deleted_audio_ids');
-  const deletedIdsSet = new Set(storedDeletedIds ? JSON.parse(storedDeletedIds) : []);
-
   try {
-    const res = await fetch('/api/audio-database');
-    if (res.ok) {
-      const serverRecords = await res.json();
-      if (Array.isArray(serverRecords) && serverRecords.length > 0) {
-        const recordMap = new Map();
-        localAudioCorpus.forEach(item => {
-          if (item && item.id && !deletedIdsSet.has(item.id)) recordMap.set(item.id, item);
-        });
-        serverRecords.forEach(item => {
-          if (item && item.id && !deletedIdsSet.has(item.id)) {
-            recordMap.set(item.id, item);
-          }
-        });
-        localAudioCorpus = Array.from(recordMap.values());
-        localStorage.setItem('vb_audio_corpus', JSON.stringify(localAudioCorpus));
-        updateGlobalStats();
-        if (typeof drawMapMarkers === 'function') {
-          drawMapMarkers();
-        }
-        if (typeof filterMapData === 'function' && selectedProvince) {
-          filterMapData();
-        }
-      }
+    const res = await apiFetch('/api/audio-database');
+    if (!res.ok) return;
+
+    const serverRecords = await res.json();
+    if (!Array.isArray(serverRecords)) return;
+
+    localAudioCorpus = serverRecords;
+    localStorage.setItem('vb_audio_corpus', JSON.stringify(localAudioCorpus));
+
+    updateGlobalStats();
+    if (typeof drawMapMarkers === 'function') drawMapMarkers();
+    if (typeof filterMapData === 'function' && selectedProvince) filterMapData();
+  } catch (e) {
+    console.warn('[Đồng bộ] Không tải được danh sách bản ghi từ server:', e);
+  }
+}
+
+/** Từ điển cũng lấy từ MySQL; data.js chỉ còn là bản dự phòng lúc tải trang. */
+async function fetchLexiconFromBackend() {
+  try {
+    const res = await apiFetch('/api/lexicon');
+    if (!res.ok) return;
+
+    const serverLexicon = await res.json();
+    if (!Array.isArray(serverLexicon) || !serverLexicon.length) return;
+
+    localLexicon = serverLexicon;
+    localStorage.setItem('vb_lexicon', JSON.stringify(localLexicon));
+
+    updateGlobalStats();
+    if (typeof renderDictionaryList === 'function' && activeTab === 'dictionary-view') {
+      renderDictionaryList(localLexicon);
     }
   } catch (e) {
-    console.warn("[Audio DB Sync] Could not fetch audio database from backend:", e);
+    console.warn('[Đồng bộ] Không tải được từ điển từ server:', e);
   }
 }
 
@@ -224,8 +236,14 @@ function setupNavigation() {
 }
 
 function switchTab(viewId) {
+  // Chặn ở phía giao diện; server vẫn kiểm tra quyền độc lập trên mỗi API
+  if (viewId === 'admin-view' && !(window.GNS_AUTH && window.GNS_AUTH.isAdmin())) {
+    window.GNS_AUTH && window.GNS_AUTH.requireLogin('Khu vực quản trị chỉ dành cho quản trị viên.');
+    return;
+  }
+
   activeTab = viewId;
-  
+
   // Stop any playing audio
   stopAudioPlayer();
   if (window.voiceBankGames) {
@@ -251,12 +269,23 @@ function switchTab(viewId) {
   });
 
   // Special hooks
+  if (viewId === 'contribute-view') {
+    if (window.GNS_CONTRIBUTE) window.GNS_CONTRIBUTE.render();
+  }
+
+  if (viewId === 'archive-view') {
+    if (window.GNS_ARCHIVE) {
+      window.GNS_ARCHIVE.initArchiveView();
+      window.GNS_ARCHIVE.renderCoverage();
+    }
+  }
+
   if (viewId === 'quizzes-view') {
     if (window.voiceBankGames) {
       window.voiceBankGames.initHub();
     }
   } else if (viewId === 'admin-view') {
-    renderAdminQueue();
+    switchAdminSubTab('dashboard');
   } else if (viewId === 'map-view') {
     // Redraw dynamic markers on GeoJSON SVG map if selected tab
     setTimeout(() => {
@@ -294,7 +323,7 @@ function initMapModule() {
   const mapWrapper = document.getElementById('geojson-map-container');
 
   // Load geojson
-  fetch('/vietnam.geojson')
+  fetch('/vietnam.geojson?v=202608181316')
     .then(res => res.json())
     .then(geojson => {
       cachedGeojsonData = geojson;
@@ -426,9 +455,15 @@ function renderGeoJsonMap() {
     return coords;
   }
 
+  // Hoàng Sa và Trường Sa nằm rất xa bờ. Vẽ đúng vị trí thật sẽ nới khung bao
+  // gấp đôi và làm đất liền co lại một nửa, nên tách ra vẽ trong khung phụ —
+  // đúng quy ước bản đồ hành chính Việt Nam.
+  const insetFeatures = cachedGeojsonData.features.filter(f => f.properties['gns-inset']);
+  const mainFeatures = cachedGeojsonData.features.filter(f => !f.properties['gns-inset']);
+
   // Tinh toan toa do bao het toan bo ban do Viet Nam
   let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
-  cachedGeojsonData.features.forEach(f => {
+  mainFeatures.forEach(f => {
     const pts = getGeometryCoords(f.geometry);
     pts.forEach(pt => {
       const lon = pt[0];
@@ -478,7 +513,7 @@ function renderGeoJsonMap() {
   let labelsHtml = '';
   computedCentroids = {};
 
-  cachedGeojsonData.features.forEach((f, idx) => {
+  mainFeatures.forEach((f, idx) => {
     const provName = getProvinceStandardName(f);
     const isTarget = provName !== 'Khác';
 
@@ -557,19 +592,60 @@ function renderGeoJsonMap() {
   // Clean background art without vector ribbon overlays
   let bgArtContent = '';
 
-  // Update container background according to theme (darker, softer background)
-  const mapWrapper = document.getElementById('geojson-map-container');
-  if (mapWrapper) {
-    if (themeMode === 'cyber-dark') {
-      mapWrapper.style.backgroundColor = '#090e1a';
-      mapWrapper.style.backgroundImage = 'linear-gradient(135deg, #070a14 0%, #0f172a 50%, #1e1b4b 100%)';
-    } else {
-      mapWrapper.style.backgroundColor = '#1e293b';
-      mapWrapper.style.backgroundImage = "linear-gradient(rgba(15, 23, 42, 0.46), rgba(15, 23, 42, 0.46)), url('landscape_bg.png')";
-      mapWrapper.style.backgroundSize = 'cover';
-      mapWrapper.style.backgroundPosition = 'center center';
-    }
+  // Nền bản đồ do theme-light.css lo, không cần đặt inline ở đây nữa.
+
+
+  /**
+   * Vẽ một quần đảo trong khung phụ: mỗi đảo là một chấm, kèm tên quần đảo.
+   * Toạ độ trong feature là kinh/vĩ độ thật, được chiếu riêng vào khung này.
+   */
+  function buildInsetBox(feature, boxX, boxY, boxW, boxH) {
+    const pts = feature.geometry.coordinates;
+    if (!pts || !pts.length) return '';
+
+    const lons = pts.map(p => p[0]);
+    const lats = pts.map(p => p[1]);
+    const padLon = (Math.max(...lons) - Math.min(...lons)) * 0.18 || 0.3;
+    const padLat = (Math.max(...lats) - Math.min(...lats)) * 0.18 || 0.3;
+    const lon0 = Math.min(...lons) - padLon, lon1 = Math.max(...lons) + padLon;
+    const lat0 = Math.min(...lats) - padLat, lat1 = Math.max(...lats) + padLat;
+
+    // Giữ đúng tỉ lệ để hình dạng quần đảo không bị bóp méo
+    const innerTop = 20;
+    const availW = boxW - 12, availH = boxH - innerTop - 8;
+    const scale = Math.min(availW / (lon1 - lon0), availH / (lat1 - lat0));
+    const drawW = (lon1 - lon0) * scale, drawH = (lat1 - lat0) * scale;
+    const offX = boxX + 6 + (availW - drawW) / 2;
+    const offY = boxY + innerTop + (availH - drawH) / 2;
+
+    const names = feature.properties['gns-islands'] || [];
+    const dots = pts.map((p, i) => {
+      const x = offX + (p[0] - lon0) * scale;
+      const y = offY + drawH - (p[1] - lat0) * scale;
+      const label = names[i] || '';
+      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6"
+                fill="#FDE68A" stroke="#B45309" stroke-width="0.8">
+                <title>${label}</title></circle>`;
+    }).join('');
+
+    return `
+      <g class="geojson-inset">
+        <rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" rx="6"
+              fill="rgba(15,23,42,0.55)" stroke="#FDE68A" stroke-width="1.2" stroke-dasharray="4 3"/>
+        <text x="${boxX + boxW / 2}" y="${boxY + 14}" text-anchor="middle"
+              font-size="11" font-weight="700" fill="#FDE68A"
+              style="paint-order:stroke;stroke:#0f172a;stroke-width:2.5px">${feature.properties.name}</text>
+        ${dots}
+      </g>`;
   }
+
+  // Hai khung phụ xếp dọc ở góc phải, tránh đè lên dải đất liền hình chữ S
+  const INSET_W = 104, INSET_H = 96, INSET_X = svgWidth - INSET_W - 12;
+  let insetHtml = '';
+  const hoangSa = insetFeatures.find(f => f.properties['gns-inset'] === 'hoangsa');
+  const truongSa = insetFeatures.find(f => f.properties['gns-inset'] === 'truongsa');
+  if (hoangSa) insetHtml += buildInsetBox(hoangSa, INSET_X, 250, INSET_W, INSET_H);
+  if (truongSa) insetHtml += buildInsetBox(truongSa, INSET_X, 250 + INSET_H + 10, INSET_W, INSET_H);
 
   container.innerHTML = `
     <svg viewBox="0 0 ${svgWidth} ${svgHeight}" class="geojson-svg" xmlns="http://www.w3.org/2000/svg" style="max-height: 90vh;">
@@ -693,6 +769,9 @@ function renderGeoJsonMap() {
       </g>
       <g id="geojson-labels-group" style="pointer-events: none;">
         ${labelsHtml}
+      </g>
+      <g id="geojson-inset-group">
+        ${insetHtml}
       </g>
       <g id="geojson-pins-group">
         <!-- Pins generated dynamically -->
@@ -987,9 +1066,13 @@ function generateContextualTranscript(title, province, topic) {
 
     // Admin verified items do NOT display "% AI", display "Đã kiểm duyệt" instead
     const isVerifiedByAdmin = aud.verifiedByAdmin || aud.verified === true || aud.id.startsWith('p_') || aud.id.startsWith('yt_');
+    // Chỉ hiện huy hiệu khi có căn cứ thật: đã qua kiểm duyệt của người,
+    // hoặc có độ tin cậy nhận dạng ĐO ĐƯỢC từ Whisper. Không có thì không hiện gì.
     const badgeHtml = isVerifiedByAdmin
       ? `<span style="color: #22c55e; font-weight: 600;"><i class="fas fa-check-circle"></i> Đã kiểm duyệt</span>`
-      : `<span style="color: var(--color-primary); font-weight: 600;"><i class="fas fa-certificate"></i> ${aud.confidence}% AI</span>`;
+      : (typeof aud.sttConfidence === 'number'
+        ? `<span style="color: var(--text-muted); font-weight: 600;" title="Độ tin cậy nhận dạng giọng nói tự động, đo từ Whisper"><i class="fas fa-waveform-lines"></i> Nhận dạng ${aud.sttConfidence}%</span>`
+        : '');
 
     const safeTitle = (aud.title || '').replace(/'/g, "\\'");
     const reportBtnHtml = `<span class="report-btn-tag" onclick="event.stopPropagation(); openReportModal('${aud.id}', '${safeTitle}')" title="Báo cáo bản ghi âm này" style="cursor: pointer; color: #ef4444; font-size: 11px; margin-left: auto; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; background: rgba(239,68,68,0.1); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(239,68,68,0.25);"><i class="fas fa-flag"></i> Báo cáo</span>`;
@@ -1638,7 +1721,7 @@ function setupAdminYoutubeUpload() {
       submitBtn.innerText = "Đang lưu...";
 
       try {
-        const response = await fetch('/api/add-audio', {
+        const response = await apiFetch('/api/add-audio', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1900,7 +1983,47 @@ function stopRecording() {
   }
 }
 
+/* Thông số âm thanh đo được từ tệp người dùng chọn/ghi. Đo bằng
+   decodeAudioData nên là số thật của tệp, không phải ước lượng. */
+let measuredAudioMeta = { durationSeconds: null, sampleRate: null, channels: null };
+
+async function measureAudioBlob(blob) {
+  measuredAudioMeta = { durationSeconds: null, sampleRate: null, channels: null };
+  const box = document.getElementById('contrib-audio-meta');
+
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx || !blob) return measuredAudioMeta;
+
+    const ctx = new AudioCtx();
+    const buffer = await ctx.decodeAudioData(await blob.arrayBuffer());
+
+    measuredAudioMeta = {
+      durationSeconds: Math.round(buffer.duration * 100) / 100,
+      sampleRate: buffer.sampleRate,
+      channels: buffer.numberOfChannels
+    };
+    ctx.close();
+
+    if (box) {
+      box.innerHTML = `<i class="fas fa-circle-check" style="color: var(--color-success)"></i>
+        Đã đo: <strong>${formatTime(Math.round(buffer.duration))}</strong> ·
+        ${(buffer.sampleRate / 1000).toFixed(1)} kHz ·
+        ${buffer.numberOfChannels === 1 ? 'mono' : 'stereo'}`;
+    }
+  } catch (err) {
+    console.warn('[audio] Không đo được thông số tệp:', err);
+    if (box) box.innerHTML = '<i class="fas fa-circle-info"></i> Không đọc được thông số tệp — máy chủ sẽ tự đo lại.';
+  }
+
+  return measuredAudioMeta;
+}
+
 async function submitSpeechUpload() {
+  if (window.GNS_AUTH && !window.GNS_AUTH.requireLogin('Bạn cần đăng nhập để đóng góp bản ghi âm.')) {
+    return;
+  }
+
   const title = document.getElementById('contrib-title').value.trim();
   const anonymous = document.getElementById('contrib-anonymous').checked;
   const speaker = anonymous ? "Ẩn danh" : document.getElementById('contrib-speaker').value.trim();
@@ -1935,6 +2058,9 @@ async function submitSpeechUpload() {
     alert("Vui lòng thực hiện Ghi âm từ Micro HOẶC Tải tệp âm thanh sẵn có (.mp3, .wav, .m4a).");
     return;
   }
+
+  // Đo thông số tệp ngay trước khi gửi, để chắc chắn số đi kèm đúng tệp này
+  await measureAudioBlob(targetBlob);
 
   // Step 1: Hide form modal & Open AI Pipeline loading screen
   const contribModal = document.getElementById('contribution-modal');
@@ -1978,12 +2104,28 @@ async function submitSpeechUpload() {
     ageGroup,
     topic,
     consent: true,
-    audioDataUrl
+    // Đồng ý nhân bản giọng là tuỳ chọn riêng, mặc định KHÔNG cho phép
+    consentVoiceClone: Boolean(
+      (document.getElementById('contrib-consent-clone') || {}).checked
+    ),
+    audioDataUrl,
+
+    // Siêu dữ liệu nghiên cứu
+    recordedAt: (document.getElementById('contrib-recorded-at') || {}).value || null,
+    locality: ((document.getElementById('contrib-locality') || {}).value || '').trim() || null,
+    collector: ((document.getElementById('contrib-collector') || {}).value || '').trim() || null,
+    device: ((document.getElementById('contrib-device') || {}).value || '').trim() || null,
+    license: (document.getElementById('contrib-license') || {}).value || 'CC-BY-NC-4.0',
+
+    // Thời lượng và tần số lấy mẫu ĐO THẬT từ tệp, không phải ước lượng
+    durationSeconds: measuredAudioMeta.durationSeconds,
+    sampleRate: measuredAudioMeta.sampleRate,
+    channels: measuredAudioMeta.channels
   };
 
   // Step 3: Send POST to backend /api/upload-speech & save to pending_contributions.json
   try {
-    const res = await fetch('/api/upload-speech', {
+    const res = await apiFetch('/api/upload-speech', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -2216,6 +2358,14 @@ function showDictionaryDetail(wordObj) {
   safeSetText('detail-word', wordObj.word);
   safeSetText('detail-region-tag', wordObj.region);
   safeSetText('detail-meaning', wordObj.meaning);
+
+  // Phiên âm quốc tế: chỉ hiện khi mục từ thực sự có dữ liệu
+  const ipaEl = document.getElementById('detail-ipa');
+  if (ipaEl) {
+    ipaEl.textContent = wordObj.ipa ? `/${wordObj.ipa}/` : '';
+    ipaEl.style.display = wordObj.ipa ? '' : 'none';
+  }
+
   safeSetText('detail-example-orig', wordObj.example);
   safeSetText('detail-example-trans', wordObj.exampleTranslation);
   const aiInsightEl = document.getElementById('detail-ai-insight');
@@ -2328,7 +2478,7 @@ async function triggerTranslation() {
   destArea.innerHTML = '<span class="translator-output" style="color: var(--color-primary); font-size: 14px;"><i class="fas fa-brain fa-pulse"></i> Đang gửi yêu cầu dịch thuật tới máy chủ...</span>';
 
   try {
-    const response = await fetch('/api/translate', {
+    const response = await apiFetch('/api/translate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2536,7 +2686,7 @@ async function triggerBotQuestion(text) {
   container.scrollTop = container.scrollHeight;
 
   try {
-    const response = await fetch('/api/chatbot', {
+    const response = await apiFetch('/api/chatbot', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: text })
@@ -2804,6 +2954,10 @@ function setupReportModal() {
 
   if (submitBtn) {
     submitBtn.onclick = async function() {
+      if (window.GNS_AUTH && !window.GNS_AUTH.requireLogin('Bạn cần đăng nhập để báo cáo nội dung.')) {
+        return;
+      }
+
       let audioId = document.getElementById('report-audio-id').value;
       let audioTitle = document.getElementById('report-modal-audio-title')?.innerText || '';
       
@@ -2836,7 +2990,7 @@ function setupReportModal() {
 
       // 1. Try sending to Backend Server API
       try {
-        const res = await fetch('/api/report-audio', {
+        const res = await apiFetch('/api/report-audio', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -2908,54 +3062,64 @@ let activeAdminReviewId = null;
 let reportedAudios = [];
 let activeAdminReportId = null;
 
-function switchAdminSubTab(subTabName) {
-  const pendingTabBtn = document.getElementById('tab-btn-pending');
-  const reportsTabBtn = document.getElementById('tab-btn-reports');
-  const pendingSection = document.getElementById('admin-pending-section');
-  const reportsSection = document.getElementById('admin-reports-section');
+/* Ba tab quản trị. Viết theo bảng thay vì if/else lồng nhau để
+   thêm tab sau này chỉ cần thêm một dòng. */
+const ADMIN_SUBTABS = {
+  dashboard: { btn: 'tab-btn-dashboard', section: 'admin-dashboard-section',
+               color: '#a855f7', bg: 'rgba(168, 85, 247, 0.15)', border: 'rgba(168, 85, 247, 0.4)',
+               load: () => window.GNS_ADMIN && window.GNS_ADMIN.renderDashboard() },
+  pending:   { btn: 'tab-btn-pending', section: 'admin-pending-section',
+               color: '#38bdf8', bg: 'rgba(14, 165, 233, 0.15)', border: 'rgba(56, 189, 248, 0.3)',
+               load: () => fetchPendingContributionsFromBackend() },
+  reports:   { btn: 'tab-btn-reports', section: 'admin-reports-section',
+               color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)', border: 'rgba(239, 68, 68, 0.4)',
+               load: () => fetchReportedAudiosFromBackend() },
+  dups:      { btn: 'tab-btn-dups', section: 'admin-dups-section',
+               color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', border: 'rgba(245, 158, 11, 0.4)',
+               load: () => window.GNS_ARCHIVE && window.GNS_ARCHIVE.renderDuplicates() },
+  users:     { btn: 'tab-btn-users', section: 'admin-users-section',
+               color: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.15)', border: 'rgba(14, 165, 233, 0.4)',
+               load: () => window.GNS_ADMIN && window.GNS_ADMIN.renderUsers() },
+  system:    { btn: 'tab-btn-system', section: 'admin-system-section',
+               color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)', border: 'rgba(16, 185, 129, 0.4)',
+               load: () => window.GNS_ADMIN && window.GNS_ADMIN.renderSystem() },
+  audit:     { btn: 'tab-btn-audit', section: 'admin-audit-section',
+               color: '#64748b', bg: 'rgba(100, 116, 139, 0.15)', border: 'rgba(100, 116, 139, 0.4)',
+               load: () => window.GNS_ADMIN && window.GNS_ADMIN.renderAuditLog() },
+  settings:  { btn: 'tab-btn-settings', section: 'admin-settings-section',
+               color: '#64748b', bg: 'rgba(100, 116, 139, 0.15)', border: 'rgba(100, 116, 139, 0.4)',
+               load: () => window.GNS_ADMIN && window.GNS_ADMIN.renderSettings() },
+  ttslog:    { btn: 'tab-btn-ttslog', section: 'admin-ttslog-section',
+               color: '#a855f7', bg: 'rgba(168, 85, 247, 0.15)', border: 'rgba(168, 85, 247, 0.4)',
+               load: () => window.GNS_ADMIN && window.GNS_ADMIN.renderTtsLog() }
+};
 
-  if (subTabName === 'reports') {
-    if (pendingTabBtn) {
-      pendingTabBtn.classList.remove('active');
-      pendingTabBtn.style.background = 'rgba(255,255,255,0.03)';
-      pendingTabBtn.style.color = '#9ca3af';
-      pendingTabBtn.style.borderColor = 'rgba(255,255,255,0.08)';
-    }
-    if (reportsTabBtn) {
-      reportsTabBtn.classList.add('active');
-      reportsTabBtn.style.background = 'rgba(239, 68, 68, 0.15)';
-      reportsTabBtn.style.color = '#ef4444';
-      reportsTabBtn.style.borderColor = 'rgba(239, 68, 68, 0.4)';
-    }
-    if (pendingSection) pendingSection.style.display = 'none';
-    if (reportsSection) reportsSection.style.display = 'block';
+function switchAdminSubTab(name) {
+  const target = ADMIN_SUBTABS[name] ? name : 'dashboard';
 
-    fetchReportedAudiosFromBackend();
-  } else {
-    if (reportsTabBtn) {
-      reportsTabBtn.classList.remove('active');
-      reportsTabBtn.style.background = 'rgba(255,255,255,0.03)';
-      reportsTabBtn.style.color = '#9ca3af';
-      reportsTabBtn.style.borderColor = 'rgba(255,255,255,0.08)';
-    }
-    if (pendingTabBtn) {
-      pendingTabBtn.classList.add('active');
-      pendingTabBtn.style.background = 'rgba(14, 165, 233, 0.15)';
-      pendingTabBtn.style.color = '#38bdf8';
-      pendingTabBtn.style.borderColor = 'rgba(56, 189, 248, 0.3)';
-    }
-    if (reportsSection) reportsSection.style.display = 'none';
-    if (pendingSection) pendingSection.style.display = 'block';
+  Object.entries(ADMIN_SUBTABS).forEach(([key, cfg]) => {
+    const btn = document.getElementById(cfg.btn);
+    const section = document.getElementById(cfg.section);
+    const isActive = key === target;
 
-    fetchPendingContributionsFromBackend();
-  }
+    if (btn) {
+      btn.classList.toggle('active', isActive);
+      btn.style.background = isActive ? cfg.bg : 'rgba(255,255,255,0.03)';
+      btn.style.color = isActive ? cfg.color : '#9ca3af';
+      btn.style.borderColor = isActive ? cfg.border : 'rgba(255,255,255,0.08)';
+    }
+    if (section) section.style.display = isActive ? 'block' : 'none';
+  });
+
+  const cfg = ADMIN_SUBTABS[target];
+  if (cfg.load) cfg.load();
 }
 window.switchAdminSubTab = switchAdminSubTab;
 
 async function fetchReportedAudiosFromBackend() {
   let backendReports = [];
   try {
-    const res = await fetch('/api/admin/reports');
+    const res = await apiFetch('/api/admin/reports');
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -3107,7 +3271,7 @@ async function dismissAdminReport() {
   if (!item) return;
 
   try {
-    const res = await fetch('/api/admin/reports/dismiss', {
+    const res = await apiFetch('/api/admin/reports/dismiss', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: item.id, audio_id: item.audio_id })
@@ -3170,12 +3334,12 @@ async function deleteAdminReportedAudio() {
 
     // 4. Send API request to backend to delete permanently from disk & deleted_audios.json
     try {
-      await fetch('/api/admin/delete-reported-audio', {
+      await apiFetch('/api/admin/delete-reported-audio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: item.id, audio_id: targetAudioId })
       });
-      await fetch(`/api/admin/reports/${encodeURIComponent(targetAudioId)}`, {
+      await apiFetch(`/api/admin/reports/${encodeURIComponent(targetAudioId)}`, {
         method: 'DELETE'
       }).catch(() => {});
     } catch(e) {
@@ -3249,7 +3413,7 @@ function initAdminModule() {
 
 async function fetchPendingContributionsFromBackend() {
   try {
-    const res = await fetch('/api/pending-contributions');
+    const res = await apiFetch('/api/pending-contributions');
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -3293,7 +3457,11 @@ function renderAdminQueue() {
     const card = document.createElement('div');
     card.className = `admin-queue-card ${activeAdminReviewId === item.id ? 'active' : ''}`;
     
-    const badgeText = item.purityPercentage || `${item.confidence || 94}% KHỚP`;
+    // Trước đây chỗ này hiện "% KHỚP" bịa. Giờ hiện thông tin có thật:
+    // thời lượng bản ghi, hoặc trạng thái nếu chưa đo được.
+    const badgeText = item.durationSeconds
+      ? formatTime(Math.round(item.durationSeconds))
+      : 'Chờ duyệt';
 
     card.innerHTML = `
       <div class="admin-card-header">
@@ -3335,15 +3503,25 @@ function selectAdminReviewItem(item) {
     audioPlayer.src = playUrl || "";
   }
 
-  // AI Pipeline Labels
+  // Thẻ thông tin: CHỈ hiện thứ đo được hoặc do người nhập.
+  // Hai thẻ cũ "độ thuần giọng %" và "audEERING AI" đã bị gỡ vì không hề
+  // có phép đo nào đứng sau — độ tuổi là do người đóng góp tự chọn.
   const aiTagWrapper = document.getElementById('admin-ai-tags-row');
   if (aiTagWrapper) {
-    aiTagWrapper.innerHTML = `
-      <span class="ai-pill green"><i class="fas fa-check-circle"></i> Đặt chuẩn giọng: ${item.province} (${item.purityPercentage || '94%'})</span>
-      <span class="ai-pill"><i class="fas fa-user-clock"></i> ${item.ageAudEERING || ('audEERING AI: ' + item.ageGroup)}</span>
-      <span class="ai-pill"><i class="fas fa-robot"></i> Whisper STT Sub</span>
-      <span class="ai-pill"><i class="fas fa-book"></i> RAG Lexicon Translation</span>
-    `;
+    const pills = [];
+    pills.push(`<span class="ai-pill"><i class="fas fa-location-dot"></i> ${item.province}${item.locality ? ' — ' + item.locality : ''}</span>`);
+    pills.push(`<span class="ai-pill"><i class="fas fa-user"></i> ${item.ageGroup || '—'} · ${item.gender || '—'} <em style="opacity:.6">(người gửi khai)</em></span>`);
+    if (item.durationSeconds) {
+      pills.push(`<span class="ai-pill"><i class="fas fa-clock"></i> ${formatTime(Math.round(item.durationSeconds))}${item.sampleRate ? ' · ' + (item.sampleRate / 1000) + ' kHz' : ''}</span>`);
+    }
+    if (typeof item.sttConfidence === 'number') {
+      const cls = item.sttConfidence >= 75 ? 'green' : '';
+      pills.push(`<span class="ai-pill ${cls}" title="Đo từ log-xác suất của Whisper"><i class="fas fa-robot"></i> Whisper nhận dạng ${item.sttConfidence}%</span>`);
+    } else if (item.transcriptDialect) {
+      pills.push(`<span class="ai-pill"><i class="fas fa-robot"></i> Whisper đã nhận dạng</span>`);
+    }
+    pills.push(`<span class="ai-pill"><i class="fas fa-scale-balanced"></i> ${item.license || 'CC-BY-NC-4.0'}</span>`);
+    aiTagWrapper.innerHTML = pills.join('');
   }
 
   // Populate Editable Subtitles Textareas
@@ -3363,6 +3541,70 @@ function selectAdminReviewItem(item) {
       item.transcriptStandard = standardTextarea.value;
     };
   }
+
+  renderCloneConsentToggle(item);
+}
+
+/**
+ * Công tắc đồng ý nhân bản giọng. Trạng thái lấy từ ô người đóng góp đã
+ * tích lúc gửi; admin chỉ nên bật thêm khi có xác nhận rõ ràng từ họ.
+ */
+function renderCloneConsentToggle(item) {
+  let holder = document.getElementById('admin-clone-consent');
+  if (!holder) {
+    const anchor = document.getElementById('admin-trans-standard');
+    if (!anchor || !anchor.parentElement) return;
+    holder = document.createElement('div');
+    holder.id = 'admin-clone-consent';
+    anchor.parentElement.appendChild(holder);
+  }
+
+  const allowed = Boolean(item.allowVoiceClone);
+
+  holder.innerHTML = `
+    <label class="clone-consent-toggle">
+      <input type="checkbox" id="admin-clone-consent-box" ${allowed ? 'checked' : ''} style="margin-top:3px">
+      <span>
+        <strong>Cho phép nhân bản giọng (Voice Cloning)</strong><br>
+        ${allowed
+          ? 'Người đóng góp đã tích ô đồng ý khi gửi bản ghi này.'
+          : 'Người đóng góp <strong>chưa</strong> đồng ý. Chỉ bật khi bạn có xác nhận trực tiếp từ họ.'}
+        <br>Tắt công tắc sẽ vô hiệu mọi giọng đã nhân bản từ bản ghi này.
+      </span>
+    </label>`;
+
+  const box = document.getElementById('admin-clone-consent-box');
+  if (!box) return;
+
+  box.addEventListener('change', async () => {
+    const nextValue = box.checked;
+
+    if (nextValue && !item.allowVoiceClone) {
+      const ok = confirm(
+        `Bật cho phép nhân bản giọng của "${item.speaker}"?\n\n` +
+        'Chỉ làm việc này khi người đóng góp đã đồng ý rõ ràng. ' +
+        'Mọi lượt sử dụng đều được ghi vào nhật ký.'
+      );
+      if (!ok) { box.checked = false; return; }
+    }
+
+    box.disabled = true;
+    try {
+      const data = await window.apiJson('/api/admin/clone-consent', {
+        method: 'POST',
+        body: JSON.stringify({ id: item.id, allowed: nextValue })
+      });
+      item.allowVoiceClone = nextValue;
+      renderCloneConsentToggle(item);
+      alert(data.message);
+      if (window.GNS_TTS && window.GNS_TTS.reload) window.GNS_TTS.reload();
+    } catch (err) {
+      box.checked = !nextValue;
+      alert(`Không cập nhật được: ${err.message}`);
+    } finally {
+      box.disabled = false;
+    }
+  });
 }
 
 async function approveContribution() {
@@ -3388,7 +3630,7 @@ async function approveContribution() {
   }
 
   try {
-    await fetch('/api/approve-contribution', {
+    await apiFetch('/api/approve-contribution', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: item.id, ...item })
@@ -3439,7 +3681,7 @@ async function rejectContribution() {
   
   if (confirm(`Bạn có chắc chắn muốn TỪ CHỐI và XÓA BỎ bản ghi "${item.title}"?`)) {
     try {
-      await fetch('/api/reject-contribution', {
+      await apiFetch('/api/reject-contribution', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: item.id })
@@ -3457,3 +3699,16 @@ async function rejectContribution() {
     alert("Đã từ chối bản ghi âm.");
   }
 }
+
+/* ==========================================================================
+   ĐỒNG BỘ THEO TRẠNG THÁI ĐĂNG NHẬP
+   ========================================================================== */
+
+document.addEventListener('gns:auth-changed', () => {
+  // Danh sách công khai đổi theo quyền (admin thấy cả bản chờ duyệt)
+  fetchAudioDatabaseFromBackend();
+
+  if (window.GNS_AUTH && window.GNS_AUTH.isAdmin() && activeTab === 'admin-view') {
+    renderAdminQueue();
+  }
+});

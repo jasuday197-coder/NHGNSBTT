@@ -1,0 +1,22 @@
+# VieNeu-TTS ban CPU/ONNX (torch-free) cho giongnoiso.com
+#
+# !!! CAC PHIEN BAN DUOI DAY BI GHIM CO CHU DICH !!!
+#
+# CPU cua VPS (QEMU Virtual CPU 2.5+) khong co SSE3/SSSE3/SSE4/POPCNT/AVX.
+# numpy >= 2.0 duoc dung san voi baseline x86-64-v2 nen import se chet ngay
+# voi loi:  "NumPy was built with baseline optimizations (X86_V2) but your
+#            machine doesn't support (X86_V2)"
+# numpy 1.26.4 co baseline thap hon nen chay duoc. scipy va librosa phai ghim
+# theo cho khop ABI cua numpy 1.x.
+#
+# Neu sau nay doi sang VPS co CPU day du (host-passthrough), co the bo ghim
+# va dung ban moi nhat cho nhanh hon.
+
+vieneu
+numpy==1.26.4
+scipy==1.13.1
+librosa==0.10.2.post1
+
+fastapi>=0.115
+uvicorn[standard]>=0.32
+pydantic>=2.9

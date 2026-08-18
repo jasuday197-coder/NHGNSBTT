@@ -1,0 +1,213 @@
+/* ==========================================================================
+   GIAO DIỆN SÁNG — nạp CUỐI CÙNG để ghi đè các mảng nền tối còn sót
+   từ thời trang web dùng theme tối.
+
+   Nguyên tắc: nền sáng, chữ đậm, giữ nguyên màu nhấn của thương hiệu.
+   Chỉ lớp phủ mờ của modal là còn tối — đó là quy ước chung để làm nổi
+   hộp thoại, không phải "giao diện tối".
+   ========================================================================== */
+
+/* --- Khung bản đồ: ảnh nền phủ lớp SÁNG thay vì lớp tối ---------------- */
+
+.map-wrapper,
+#geojson-map-container {
+  background-color: #eef6ff !important;
+  /* Lop phu TRANG mo thay cho lop phu toi cu trong style.css.
+     0.55 la muc vua du: anh phong canh con nhin ro, ban do van noi len. */
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.55)),
+    url('/landscape_bg.png') !important;
+  background-size: cover !important;
+  background-position: center center !important;
+  box-shadow: inset 0 0 60px rgba(15, 23, 42, 0.04),
+              0 12px 36px rgba(15, 23, 42, 0.10) !important;
+  border: 2px solid rgba(14, 165, 233, 0.35) !important;
+}
+
+.geojson-svg { filter: none !important; }
+
+/* Nhãn tên tỉnh trên bản đồ: nền trắng chữ đậm */
+.geojson-label-bg { fill: rgba(255, 255, 255, 0.92) !important; }
+.geojson-label-text { fill: var(--text-main) !important; }
+
+/* --- Khung phụ Hoàng Sa / Trường Sa ------------------------------------ */
+
+.geojson-inset rect {
+  fill: rgba(255, 255, 255, 0.88) !important;
+  stroke: var(--color-primary) !important;
+}
+
+.geojson-inset text {
+  fill: var(--color-secondary) !important;
+  stroke: #ffffff !important;
+}
+
+.geojson-inset circle {
+  fill: var(--color-warning) !important;
+  stroke: #92400e !important;
+}
+
+/* --- Thẻ phụ đề trên trình phát ---------------------------------------- */
+
+.subtitle-overlay,
+.subtitle-box {
+  color: var(--text-main) !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12) !important;
+}
+
+/* --- Ô nhập liệu và vùng văn bản --------------------------------------- */
+
+.textarea-wrap,
+.transcript-box,
+.form-control,
+textarea.form-control,
+input.form-input,
+select.form-input {
+  color: var(--text-main) !important;
+  background: var(--bg-main) !important;
+  border-color: var(--border-color) !important;
+}
+
+.form-control::placeholder,
+.form-input::placeholder { color: #94a3b8 !important; }
+
+/* --- Modal ------------------------------------------------------------- */
+
+.modal-card,
+.mg-modal-card {
+  color: var(--text-main) !important;
+  background: var(--bg-surface-solid) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.modal-card h1, .modal-card h2, .modal-card h3, .modal-card h4,
+.modal-card strong, .modal-card label,
+.mg-modal-card h1, .mg-modal-card h2, .mg-modal-card h3, .mg-modal-card h4 {
+  color: var(--text-main) !important;
+}
+
+/* --- Màn hình xử lý âm thanh ------------------------------------------- */
+
+.ai-steps {
+  background: var(--bg-main) !important;
+  border-color: var(--border-color) !important;
+}
+
+.ai-step { color: var(--text-muted) !important; }
+.ai-step.done { color: var(--color-success) !important; }
+.ai-step.active { color: var(--color-primary) !important; }
+
+.ai-pill {
+  color: var(--text-muted) !important;
+  background: var(--bg-main) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.ai-pill.green {
+  color: #15803d !important;
+  background: rgba(34, 197, 94, 0.12) !important;
+  border-color: rgba(34, 197, 94, 0.3) !important;
+}
+
+/* --- Thanh sóng âm ------------------------------------------------------ */
+
+.wave-bar { background: var(--color-primary) !important; }
+
+/* --- Trò chơi ----------------------------------------------------------- */
+
+.mg-hub, .mg-panel, .mg-card, .mg-question-box, .mg-match-card, .mg-slot {
+  color: var(--text-main) !important;
+  background: var(--bg-surface-solid) !important;
+  border-color: var(--border-color) !important;
+}
+
+.btn-mg-key {
+  color: var(--text-main) !important;
+  background: var(--bg-main) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.btn-mg-key:hover:not([disabled]) {
+  color: var(--text-white) !important;
+  background: var(--color-primary) !important;
+}
+
+/* --- Tab quản trị khi KHÔNG được chọn ----------------------------------- */
+
+.admin-subtab-btn:not(.active) {
+  color: var(--text-muted) !important;
+  background: var(--bg-main) !important;
+  border-color: var(--border-color) !important;
+}
+
+.admin-queue-card,
+.admin-card-panel,
+.admin-sidebar,
+.admin-detail-pane {
+  color: var(--text-main) !important;
+  background: var(--bg-surface-solid) !important;
+  border-color: var(--border-color) !important;
+}
+
+.admin-queue-card.active {
+  border-color: var(--color-primary) !important;
+  box-shadow: var(--glow-cyan) !important;
+}
+
+/* --- Trình phát âm thanh ------------------------------------------------ */
+
+.audio-player-bar,
+.player-panel {
+  color: var(--text-main) !important;
+  background: var(--bg-surface-solid) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* --- Bong bóng chatbot --------------------------------------------------- */
+
+.chat-bubble.bot {
+  color: var(--text-main) !important;
+  background: var(--bg-surface-solid) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.chat-bubble.user {
+  color: var(--text-white) !important;
+  background: var(--color-primary) !important;
+}
+
+/* --- Bảng biểu ---------------------------------------------------------- */
+
+table { color: var(--text-main); }
+
+/* --- Không để chữ trắng trên nền sáng ----------------------------------- */
+
+.app-view [style*="color: #ffffff"]:not([style*="background: #"]):not([style*="linear-gradient"]) {
+  color: var(--text-main) !important;
+}
+
+/* --- Ba mảng tối còn sót, tìm ra khi quét độ sáng nền toàn trang -------- */
+
+.app-footer {
+  color: var(--text-muted) !important;
+  background: var(--bg-surface-solid) !important;
+  border-top: 1px solid var(--border-color) !important;
+}
+
+.app-footer a { color: var(--color-primary) !important; }
+.app-footer h1, .app-footer h2, .app-footer h3, .app-footer h4,
+.app-footer strong { color: var(--text-main) !important; }
+
+.dict-region-selector-wrapper {
+  background: var(--bg-main) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.chat-input-bar {
+  background: var(--bg-surface-solid) !important;
+  border-top: 1px solid var(--border-color) !important;
+}
+
+/* Lớp phủ mờ sau hộp thoại vẫn để tối — đó là quy ước làm nổi hộp thoại,
+   không phải giao diện tối. Giữ nguyên .mg-modal-backdrop và .modal-overlay. */

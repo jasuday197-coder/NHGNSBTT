@@ -1,0 +1,70 @@
+/* ==========================================================================
+   NAVBAR — thu gọn dần theo bề rộng màn hình
+   Nạp SAU style.css để ghi đè.
+
+   Navbar có 4 khối: thương hiệu · menu 8 tab · thống kê · tài khoản.
+   Tổng bề rộng cần thiết ~1400px. Màn 1280 và 1366 rất phổ biến, nên
+   nếu để flex-wrap:nowrap mặc định thì mọi thứ bị bóp nát chứ không xuống dòng.
+   Cách xử lý: bỏ dần thứ ít quan trọng nhất trước, giữ menu tới cùng.
+   ========================================================================== */
+
+.sticky-navbar { gap: 16px; }
+
+/* Tên dự án không được co lại thành nhiều dòng */
+.navbar-brand { flex-shrink: 0; }
+.navbar-brand-text h1,
+.navbar-brand-text span { white-space: nowrap; }
+
+/* Menu là thứ quan trọng nhất -> cho phép chiếm phần dư.
+   overflow-x:auto ở MỌI khổ màn: khi admin đăng nhập có 9 tab, nếu để
+   tràn mặc định thì menu đè lên khối thống kê. Cuộn ngang thì tệ nhất
+   là phải kéo, còn hơn là vỡ layout. */
+.navbar-menu {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.navbar-menu::-webkit-scrollbar { display: none; }
+
+.navbar-link { white-space: nowrap; flex-shrink: 0; }
+
+.header-stats,
+.navbar-auth { flex-shrink: 0; }
+
+/* --- Dưới 1500px: bóp khoảng đệm, bỏ nhãn chữ trong ô thống kê ---------
+   Số liệu vẫn còn (icon + con số), nhãn đầy đủ nằm ở thuộc tính title. */
+@media (max-width: 1500px) {
+  .sticky-navbar { padding: 0 20px; }
+  .navbar-menu { gap: 4px; }
+  .navbar-link { padding: 6px 10px; font-size: 12.5px; }
+  .header-stats { gap: 8px; }
+  .stat-item { gap: 6px; padding: 6px 10px; font-size: 12px; }
+  .stat-item span { display: none; }
+}
+
+/* --- Dưới 1400px: bỏ hẳn khối thống kê ---------------------------------
+   Ngưỡng đặt cao vì admin đăng nhập sẽ có 9 tab. Ba con số này cũng
+   hiển thị ở trang chủ nên không mất thông tin. */
+@media (max-width: 1400px) {
+  .header-stats { display: none; }
+  .navbar-menu { gap: 2px; }
+  .navbar-link { padding: 6px 9px; font-size: 12px; }
+}
+
+/* --- Dưới 1080px: giấu chữ thương hiệu, chỉ giữ logo ------------------- */
+@media (max-width: 1080px) {
+  .sticky-navbar { padding: 0 14px; gap: 10px; }
+  .navbar-brand-text { display: none; }
+}
+
+/* --- Dưới 900px: menu căn trái để tab đầu luôn thấy được -------------- */
+@media (max-width: 900px) {
+  .navbar-menu { justify-content: flex-start; }
+}
+
+/* Dưới 768px đã có sẵn bộ quy tắc di động trong style.css */

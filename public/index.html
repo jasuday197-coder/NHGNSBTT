@@ -8,9 +8,18 @@
   <!-- FontAwesome for Premium Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   
+  <!-- Leaflet map styles -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
   <!-- Core Custom Styles -->
-  <link rel="stylesheet" href="style.css" />
-  <link rel="stylesheet" href="src/components/Minigames/MinigameUI.css" />
+  <link rel="stylesheet" href="/style.css?v=202608181316" />
+  <link rel="stylesheet" href="/navbar.css?v=202608181316" />
+  <link rel="stylesheet" href="/auth.css?v=202608181316" />
+  <link rel="stylesheet" href="/archive.css?v=202608181316" />
+  <link rel="stylesheet" href="/admin.css?v=202608181316" />
+  <link rel="stylesheet" href="/theme-light.css?v=202608181316" />
+  <link rel="stylesheet" href="/tts.css?v=202608181316" />
+  <link rel="stylesheet" href="/src/components/Minigames/MinigameUI.css?v=202608181316" />
 </head>
 <body>
 
@@ -20,7 +29,7 @@
     <header class="sticky-navbar">
       <div class="navbar-brand" onclick="switchTab('home-view')">
         <div class="navbar-logo-icon">
-          <img src="logo.png" alt="Logo" class="navbar-logo-img">
+          <img src="/logo.png" alt="Logo" class="navbar-logo-img">
         </div>
         <div class="navbar-brand-text">
           <h1>Ngân hàng Giọng nói Số</h1>
@@ -35,7 +44,10 @@
         <li class="navbar-link" data-view="translator-view">Dịch thuật</li>
         <li class="navbar-link" data-view="chatbot-view">Chatbot Chuyên gia</li>
         <li class="navbar-link" data-view="quizzes-view">Trò chơi</li>
-        <li class="navbar-link" data-view="admin-view">Admin</li>
+        <li class="navbar-link" data-view="archive-view">Kho ngữ liệu</li>
+        <li class="navbar-link" data-view="contribute-view">Cần đóng góp</li>
+        <li class="navbar-link" data-view="tts-view">Giọng nói AI</li>
+        <li class="navbar-link" data-view="admin-view" data-requires-admin style="display:none">Admin</li>
       </ul>
       
       <div class="header-stats">
@@ -55,6 +67,9 @@
           <strong class="stat-val" id="stat-vocab">0</strong>
         </div>
       </div>
+
+      <!-- Thanh tài khoản: nội dung do auth.js dựng -->
+      <div class="navbar-auth" id="navbar-auth"></div>
     </header>
 
     <!-- MAIN APP CONTENT VIEWPORT -->
@@ -75,7 +90,7 @@
                 <h2 class="hero-headline">Gìn giữ thanh âm xứ sở — <br><span>Ngân hàng Giọng nói Số Bắc Trung Bộ</span></h2>
                 
                 <p class="hero-desc">
-                  Dự án Ngân hàng Giọng nói Số là một nền tảng nghiên cứu phi lợi nhuận, được xây dựng nhằm lưu trữ, bảo tồn và tôn vinh sự phong phú của phương ngữ và văn hóa qua giọng nói của 6 tỉnh Bắc Trung Bộ. Chúng tôi cam kết dữ liệu tại đây hoàn toàn <strong>KHÔNG</strong> được sử dụng để sao chép giọng nói (Voice Cloning) hoặc phục vụ cho bất kỳ mục đích trục lợi bất chính nào.
+                  Dự án Ngân hàng Giọng nói Số là một nền tảng nghiên cứu phi lợi nhuận, được xây dựng nhằm lưu trữ, bảo tồn và tôn vinh sự phong phú của phương ngữ và văn hóa qua giọng nói của 6 tỉnh Bắc Trung Bộ. Chúng tôi cam kết dữ liệu tại đây <strong>KHÔNG</strong> phục vụ bất kỳ mục đích trục lợi bất chính nào. Hệ thống có tính năng tổng hợp giọng nói (Voice Cloning) phục vụ nghiên cứu ngữ âm, nhưng <strong>chỉ áp dụng với những bản ghi mà người đóng góp đã đồng ý riêng bằng văn bản</strong>. Bản ghi không có sự đồng ý đó sẽ không bao giờ được dùng làm giọng mẫu, và người đóng góp có thể rút lại đồng ý bất cứ lúc nào.
                 </p>
                 
                 <div class="benefits-box">
@@ -94,13 +109,17 @@
               </div>
               
               <div class="hero-image-container">
-                <img src="map_illustration.jpg" alt="Bản đồ âm thanh Bắc Trung Bộ" class="hero-image">
+                <img src="/map_illustration.jpg" alt="Bản đồ âm thanh Bắc Trung Bộ" class="hero-image">
               </div>
             </section>
             
             <!-- Core Features Grid -->
             <section class="features-section">
-              <h3 class="section-title">Khám phá các tính năng chính</h3>
+              <!-- Khối kêu gọi đóng góp: nội dung do contribute.js đổ vào từ /api/gaps.
+                     Ẩn sẵn, chỉ hiện khi thật sự có tỉnh đang thiếu dữ liệu. -->
+                <div id="home-gap-callout" class="home-gap" style="display:none"></div>
+
+                <h3 class="section-title">Khám phá các tính năng chính</h3>
               <div class="features-grid">
                 
                 <!-- Card 1: Bản đồ -->
@@ -334,7 +353,7 @@
                 <i class="fas fa-search"></i>
                 <input type="text" class="search-input" id="dict-search-input" placeholder="Tìm từ khóa phương ngữ hoặc nghĩa..." />
               </div>
-              <div style="text-align: center; margin-top: 8px; font-size: 12px; color: #9ca3af; font-style: italic;">
+              <div style="text-align: center; margin-top: 8px; font-size: 12px; color: var(--text-muted); font-style: italic;">
                 Dữ liệu được hỗ trợ bởi AI chỉ mang tính chất tham khảo. Hệ thống rất mong nhận được phản hồi đóng góp từ bạn!
               </div>
             </div>
@@ -391,6 +410,7 @@
                 <div id="dict-detail-content" style="display: none;">
                   <div class="dict-detail-header">
                     <h2 class="dict-detail-word" id="detail-word">mô</h2>
+                    <span class="dict-detail-ipa" id="detail-ipa" title="Phiên âm quốc tế (IPA)" style="display:none"></span>
                     <span class="dict-detail-tag" id="detail-region-tag">Nghệ Tĩnh, Bình Trị Thiên</span>
                   </div>
                   
@@ -448,7 +468,7 @@
                 </button>
 
                 <!-- Right Output Box -->
-                <div class="textarea-wrap" style="background: rgba(0,0,0,0.15);">
+                <div class="textarea-wrap" style="background: var(--bg-main);">
                   <span class="textarea-label" id="translator-lbl-right">Tiếng Việt Phổ Thông</span>
                   <div class="translator-output empty" id="translator-dest">Kết quả dịch sẽ hiển thị ở đây...</div>
                   <button class="copy-btn" id="btn-copy-trans" onclick="navigator.clipboard.writeText(document.getElementById('translator-dest').innerText); alert('Đã sao chép vào clipboard!')" title="Sao chép bản dịch">
@@ -503,7 +523,7 @@
                 </div>
               </div>
               
-              <div style="font-size: 12px; color: #9ca3af; margin-top: 20px; font-style: italic; text-align: center;">
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 20px; font-style: italic; text-align: center;">
                 Dữ liệu được hỗ trợ bởi AI chỉ mang tính chất tham khảo. Hệ thống rất mong nhận được phản hồi đóng góp từ bạn!
               </div>
             </div>
@@ -555,7 +575,7 @@
                   <i class="fas fa-paper-plane"></i>
                 </button>
               </div>
-              <div style="text-align: center; padding: 6px 12px 2px 12px; font-size: 11px; color: #9ca3af; font-style: italic;">
+              <div style="text-align: center; padding: 6px 12px 2px 12px; font-size: 11px; color: var(--text-muted); font-style: italic;">
                 Dữ liệu được hỗ trợ bởi AI chỉ mang tính chất tham khảo. Hệ thống rất mong nhận được phản hồi đóng góp từ bạn!
               </div>
             </div>
@@ -637,7 +657,7 @@
                 </div>
 
               </div>
-              <div style="text-align: center; margin-top: 24px; font-size: 12px; color: #9ca3af; font-style: italic;">
+              <div style="text-align: center; margin-top: 24px; font-size: 12px; color: var(--text-muted); font-style: italic;">
                 Dữ liệu được hỗ trợ bởi AI chỉ mang tính chất tham khảo. Hệ thống rất mong nhận được phản hồi đóng góp từ bạn!
               </div>
             </div>
@@ -708,7 +728,7 @@
                   <i class="fas fa-trophy"></i> Xem Bảng Xếp Hạng
                 </button>
               </div>
-              <div style="text-align: center; margin-top: 14px; font-size: 11px; color: #9ca3af; font-style: italic;">
+              <div style="text-align: center; margin-top: 14px; font-size: 11px; color: var(--text-muted); font-style: italic;">
                 Dữ liệu được hỗ trợ bởi AI chỉ mang tính chất tham khảo. Hệ thống rất mong nhận được phản hồi đóng góp từ bạn!
               </div>
             </div>
@@ -742,6 +762,64 @@
         <!-- ========================================== -->
         <!-- VIEW 6: ADMIN REVIEW PANEL -->
         <!-- ========================================== -->
+        <!-- ================= CẦN ĐÓNG GÓP ================= -->
+        <div class="app-view" id="contribute-view">
+          <div class="archive-header">
+            <h2><i class="fas fa-hand-holding-heart"></i> Cần đóng góp</h2>
+            <p>Kho đang thiếu ở đâu, thiếu cái gì. Chọn tỉnh bên dưới để đóng góp đúng chỗ đang cần nhất.</p>
+          </div>
+          <div id="contribute-panel"></div>
+        </div>
+
+        <!-- ================= KHO NGỮ LIỆU ================= -->
+        <div class="app-view" id="archive-view">
+          <div class="archive-header">
+            <h2><i class="fas fa-box-archive"></i> Kho ngữ liệu</h2>
+            <p>Toàn bộ bản ghi đã kiểm duyệt. Mỗi bản ghi có trang riêng, siêu dữ liệu đầy đủ và giấy phép rõ ràng để trích dẫn trong nghiên cứu.</p>
+          </div>
+
+          <div id="coverage-panel" class="coverage-panel"></div>
+
+          <div class="archive-download">
+            <h3><i class="fas fa-download"></i> Tải toàn bộ kho về dùng</h3>
+            <p>Dữ liệu mở cho nghiên cứu. Giấy phép áp dụng riêng cho từng bản ghi — xem cột <code>license</code>.</p>
+            <div class="archive-download-links">
+              <a href="/api/export/corpus.csv"><i class="fas fa-file-csv"></i> Kho bản ghi (CSV)</a>
+              <a href="/api/export/corpus.json"><i class="fas fa-file-code"></i> Kho bản ghi (JSON)</a>
+              <a href="/api/export/lexicon.csv"><i class="fas fa-file-csv"></i> Từ điển (CSV)</a>
+              <a href="/api/export/lexicon.json"><i class="fas fa-file-code"></i> Từ điển (JSON)</a>
+              <a href="/api/export/datapackage.json"><i class="fas fa-cube"></i> Datapackage</a>
+            </div>
+            <details class="archive-api">
+              <summary>API cho lập trình viên</summary>
+              <pre><code>GET /api/audio?q=&amp;province=&amp;topic=&amp;ageGroup=&amp;gender=&amp;sort=&amp;page=&amp;limit=
+GET /api/audio/&lt;citation_slug&gt;     chi tiết một bản ghi + trích dẫn
+GET /api/filters                    giá trị lọc hiện có trong kho
+GET /api/coverage                   độ phủ dữ liệu theo tỉnh
+GET /api/lexicon                    toàn bộ từ điển phương ngữ
+
+Không cần khoá API. Giới hạn 300 lượt/phút mỗi IP.
+Tối đa 100 bản ghi mỗi trang.</code></pre>
+            </details>
+          </div>
+
+          <div id="archive-panel"></div>
+        </div>
+
+        <!-- ================= TRANG RIÊNG BẢN GHI ================= -->
+        <div class="app-view" id="record-view">
+          <div id="record-panel"></div>
+        </div>
+
+        <!-- ================= GIỌNG NÓI AI ================= -->
+        <div class="app-view" id="tts-view">
+          <div class="tts-header">
+            <h2><i class="fas fa-wand-magic-sparkles"></i> Giọng nói AI</h2>
+            <p>Tổng hợp câu nói bằng phương ngữ Bắc Trung Bộ. Giọng nhân bản chỉ khả dụng với những bản ghi mà người đóng góp đã đồng ý riêng.</p>
+          </div>
+          <div id="tts-panel"></div>
+        </div>
+
         <div class="app-view" id="admin-view">
           
           <!-- Admin Sub-Navigation Tabs -->
@@ -752,6 +830,39 @@
             <button class="admin-subtab-btn" id="tab-btn-reports" onclick="switchAdminSubTab('reports')" style="background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
               <i class="fas fa-flag"></i> 🚩 Danh sách Báo cáo Vi phạm
             </button>
+            <button class="admin-subtab-btn" id="tab-btn-dashboard" onclick="switchAdminSubTab('dashboard')" style="background: rgba(168, 85, 247, 0.1); color: #a855f7; border: 1px solid rgba(168, 85, 247, 0.3); padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+              <i class="fas fa-gauge-high"></i> Tổng quan
+            </button>
+            <button class="admin-subtab-btn" id="tab-btn-users" onclick="switchAdminSubTab('users')" style="background: rgba(14, 165, 233, 0.1); color: #0ea5e9; border: 1px solid rgba(14, 165, 233, 0.3); padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+              <i class="fas fa-users-gear"></i> Người dùng
+            </button>
+            <button class="admin-subtab-btn" id="tab-btn-system" onclick="switchAdminSubTab('system')" style="background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+              <i class="fas fa-heart-pulse"></i> Sức khoẻ hệ thống
+            </button>
+            <button class="admin-subtab-btn" id="tab-btn-audit" onclick="switchAdminSubTab('audit')" style="background: rgba(100, 116, 139, 0.1); color: #64748b; border: 1px solid rgba(100, 116, 139, 0.3); padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+              <i class="fas fa-clipboard-list"></i> Nhật ký
+            </button>
+            <button class="admin-subtab-btn" id="tab-btn-ttslog" onclick="switchAdminSubTab('ttslog')" style="background: rgba(168, 85, 247, 0.08); color: #a855f7; border: 1px solid rgba(168, 85, 247, 0.25); padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+              <i class="fas fa-wand-magic-sparkles"></i> Giọng nói AI
+            </button>
+            <button class="admin-subtab-btn" id="tab-btn-settings" onclick="switchAdminSubTab('settings')" style="background: rgba(100, 116, 139, 0.1); color: #64748b; border: 1px solid rgba(100, 116, 139, 0.3); padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+              <i class="fas fa-key"></i> Cấu hình
+            </button>
+            <button class="admin-subtab-btn" id="tab-btn-dups" onclick="switchAdminSubTab('dups')" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+              <i class="fas fa-clone"></i> Bản ghi trùng lặp
+            </button>
+          </div>
+
+          <div id="admin-dashboard-section" style="display: none;"><div id="admin-dashboard-panel"></div></div>
+          <div id="admin-users-section" style="display: none;"><div id="admin-users-panel"></div></div>
+          <div id="admin-system-section" style="display: none;"><div id="admin-system-panel"></div></div>
+          <div id="admin-audit-section" style="display: none;"><div id="admin-audit-panel"></div></div>
+          <div id="admin-ttslog-section" style="display: none;"><div id="admin-ttslog-panel"></div></div>
+          <div id="admin-settings-section" style="display: none;"><div id="admin-settings-panel"></div></div>
+
+          <!-- SUB-VIEW 3: BẢN GHI TRÙNG LẶP -->
+          <div id="admin-dups-section" style="display: none;">
+            <div class="dup-panel" id="dup-panel"></div>
           </div>
 
           <!-- SUB-VIEW 1: PENDING CONTRIBUTIONS QUEUE -->
@@ -795,7 +906,7 @@
                   </div>
 
                   <!-- Integrated Audio Player Control -->
-                  <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; margin-bottom: 20px;">
+                  <div style="background: var(--bg-surface-solid); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; margin-bottom: 20px;">
                     <div style="font-size: 12px; font-weight: 700; color: var(--color-primary); margin-bottom: 8px;">
                       <i class="fas fa-volume-up"></i> Trình phát âm thanh kiểm duyệt (Audio Player)
                     </div>
@@ -816,20 +927,20 @@
                   </div>
 
                   <!-- Subtitle Box (Editable for Admin) -->
-                  <div class="admin-card-panel" style="margin-bottom: 24px; background: rgba(15, 23, 42, 0.4); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px;">
+                  <div class="admin-card-panel" style="margin-bottom: 24px; background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                       <h4 class="dict-section-title" style="color: #38bdf8; margin: 0;"><i class="fas fa-closed-captioning"></i> Phụ đề song ngữ (Subtitles)</h4>
                       <span style="font-size: 11px; color: #10b981; font-weight: 600; background: rgba(16, 185, 129, 0.15); padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.3);"><i class="fas fa-edit"></i> Admin nhấp vào ô để chỉnh sửa trực tiếp</span>
                     </div>
                     
-                    <div class="transcript-box" style="background: rgba(0,0,0,0.25); border-radius: 10px; padding: 14px;">
+                    <div class="transcript-box" style="background: var(--bg-main); border-radius: 10px; padding: 14px;">
                       <div class="transcript-line" style="margin-bottom: 14px;">
                         <label for="admin-trans-dialect" style="font-weight: 700; color: #fbbf24; display: block; font-size: 12px; text-transform: uppercase; margin-bottom: 6px;">🗣 Sub giọng địa phương (Whisper STT AI - Có thể sửa):</label>
-                        <textarea class="form-control" id="admin-trans-dialect" rows="2" style="width: 100%; background: rgba(15, 23, 42, 0.9); color: #ffffff; border: 1px solid rgba(251, 191, 36, 0.4); border-radius: 8px; padding: 8px 12px; font-size: 14px; font-style: italic; resize: vertical;" placeholder="Nhập hoặc chỉnh sửa phụ đề giọng địa phương..."></textarea>
+                        <textarea class="form-control" id="admin-trans-dialect" rows="2" style="width: 100%; background: var(--bg-surface-solid); color: var(--text-main); border: 1px solid rgba(251, 191, 36, 0.4); border-radius: 8px; padding: 8px 12px; font-size: 14px; font-style: italic; resize: vertical;" placeholder="Nhập hoặc chỉnh sửa phụ đề giọng địa phương..."></textarea>
                       </div>
                       <div class="transcript-line standard" style="border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 12px;">
                         <label for="admin-trans-standard" style="font-weight: 700; color: #34d399; display: block; font-size: 12px; text-transform: uppercase; margin-bottom: 6px;">🌐 Sub dịch Tiếng Phổ thông (RAG Dictionary - Có thể sửa):</label>
-                        <textarea class="form-control" id="admin-trans-standard" rows="2" style="width: 100%; background: rgba(15, 23, 42, 0.9); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.4); border-radius: 8px; padding: 8px 12px; font-size: 14px; font-weight: 500; resize: vertical;" placeholder="Nhập hoặc chỉnh sửa phụ đề dịch tiếng phổ thông..."></textarea>
+                        <textarea class="form-control" id="admin-trans-standard" rows="2" style="width: 100%; background: var(--bg-surface-solid); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.4); border-radius: 8px; padding: 8px 12px; font-size: 14px; font-weight: 500; resize: vertical;" placeholder="Nhập hoặc chỉnh sửa phụ đề dịch tiếng phổ thông..."></textarea>
                       </div>
                     </div>
                   </div>
@@ -837,7 +948,7 @@
                   <!-- Admin Action Buttons -->
                   <div class="admin-actions-row" style="display: flex; gap: 14px; justify-content: flex-end;">
                     <button class="btn btn-secondary" id="admin-btn-reject" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.08); font-weight: 600; padding: 10px 20px;"><i class="fas fa-times-circle"></i> Từ chối</button>
-                    <button class="btn btn-primary" id="admin-btn-approve" style="background: #10b981; color: #fff; border-color: #10b981; box-shadow: 0 0 12px rgba(16, 185, 129, 0.35); font-weight: 700; padding: 10px 24px;"><i class="fas fa-check-circle"></i> Duyệt (Chuyển CSDL chính)</button>
+                    <button class="btn btn-primary" id="admin-btn-approve" style="background: #10b981; color: #ffffff; border-color: #10b981; box-shadow: 0 0 12px rgba(16, 185, 129, 0.35); font-weight: 700; padding: 10px 24px;"><i class="fas fa-check-circle"></i> Duyệt (Chuyển CSDL chính)</button>
                   </div>
                 </div>
               </div>
@@ -881,7 +992,7 @@
                   </div>
 
                   <!-- Integrated Audio Player Control for Reports -->
-                  <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; margin-bottom: 20px;">
+                  <div style="background: var(--bg-surface-solid); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; margin-bottom: 20px;">
                     <div style="font-size: 12px; font-weight: 700; color: #ef4444; margin-bottom: 8px;">
                       <i class="fas fa-volume-up"></i> Trình phát âm thanh kiểm tra vi phạm (Audio Player)
                     </div>
@@ -905,7 +1016,7 @@
                   <!-- Admin Action Buttons for Reports -->
                   <div class="admin-actions-row" style="display: flex; gap: 14px; justify-content: flex-end; margin-top: auto;">
                     <button class="btn btn-secondary" id="admin-report-btn-dismiss" style="color: #38bdf8; border-color: rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.08); font-weight: 600; padding: 10px 20px;"><i class="fas fa-times"></i> ❌ Từ chối Báo cáo (Giữ bản ghi)</button>
-                    <button class="btn btn-primary" id="admin-report-btn-delete" style="background: #ef4444; color: #fff; border-color: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.35); font-weight: 700; padding: 10px 24px;"><i class="fas fa-trash-alt"></i> 🗑️ Xóa Bản Ghi Âm (Gỡ hoàn toàn)</button>
+                    <button class="btn btn-primary" id="admin-report-btn-delete" style="background: #ef4444; color: #ffffff; border-color: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.35); font-weight: 700; padding: 10px 24px;"><i class="fas fa-trash-alt"></i> 🗑️ Xóa Bản Ghi Âm (Gỡ hoàn toàn)</button>
                   </div>
                 </div>
               </div>
@@ -948,7 +1059,7 @@
             </div>
             <div class="form-group" style="flex: 1;">
               <label for="contrib-gender">Giới tính *</label>
-              <select class="form-control" id="contrib-gender" required style="background-color:#0f1726; color:white;">
+              <select class="form-control" id="contrib-gender" required style="background-color:#0f1726; color: var(--text-main);">
                 <option value="Nam">Nam</option>
                 <option value="Nữ">Nữ</option>
               </select>
@@ -958,7 +1069,7 @@
           <div class="form-row">
             <div class="form-group">
               <label for="contrib-province">Vùng / Tỉnh thành *</label>
-              <select class="form-control" id="contrib-province" required style="background-color:#0f1726; color:white;">
+              <select class="form-control" id="contrib-province" required style="background-color:#0f1726; color: var(--text-main);">
                 <option value="" disabled selected>Chọn 1 trong 6 tỉnh</option>
                 <option value="Thanh Hóa">Thanh Hóa</option>
                 <option value="Nghệ An">Nghệ An</option>
@@ -970,7 +1081,7 @@
             </div>
             <div class="form-group">
               <label for="contrib-age">Nhóm tuổi *</label>
-              <select class="form-control" id="contrib-age" required style="background-color:#0f1726; color:white;">
+              <select class="form-control" id="contrib-age" required style="background-color:#0f1726; color: var(--text-main);">
                 <option value="" disabled selected>Chọn nhóm tuổi</option>
                 <option value="<18">&lt;18 tuổi</option>
                 <option value="18-35">18-35 tuổi</option>
@@ -983,7 +1094,7 @@
 
           <div class="form-group">
             <label for="contrib-topic">Chủ đề nội dung *</label>
-            <select class="form-control" id="contrib-topic" required style="background-color:#0f1726; color:white;">
+            <select class="form-control" id="contrib-topic" required style="background-color:#0f1726; color: var(--text-main);">
               <option value="Lịch sử văn hóa">Lịch sử văn hóa (Truyền thuyết, câu chuyện cổ, di tích...)</option>
               <option value="Giọng ca đặc trưng">Giọng ca đặc trưng (Ví, Giặm, Ca Huế, hò sông nước...)</option>
               <option value="Tổng quan vùng">Tổng quan vùng (Đời sống sinh hoạt, phong tục, thói quen...)</option>
@@ -991,7 +1102,7 @@
           </div>
 
           <!-- AUDIO RECORD / FILE UPLOAD CONTAINER -->
-          <div style="background: rgba(15, 23, 42, 0.7); border: 1px dashed var(--border-color); border-radius: 12px; padding: 16px; margin: 16px 0; text-align: center;">
+          <div style="background: var(--bg-main); border: 1px dashed var(--border-color); border-radius: 12px; padding: 16px; margin: 16px 0; text-align: center;">
             <div style="font-weight: 700; font-size: 13px; color: var(--color-primary); margin-bottom: 12px;">
               <i class="fas fa-music"></i> CHỌN PHƯƠNG THỨC NỘP BẢN GHI ÂM (Micro trực tiếp HOẶC Tải tệp)
             </div>
@@ -999,19 +1110,19 @@
             <div style="display: flex; justify-content: center; gap: 20px; align-items: center; flex-wrap: wrap;">
               <!-- Option 1: Mic Direct Recording -->
               <div style="flex: 1; min-width: 220px; background: rgba(255,255,255,0.02); padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
-                <div style="font-size: 12px; font-weight: 600; color: #9ca3af; margin-bottom: 8px;">Ghi âm trực tiếp từ Micro</div>
+                <div style="font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px;">Ghi âm trực tiếp từ Micro</div>
                 <div class="mic-circle" id="mic-trigger-btn" style="margin: 0 auto 8px auto; cursor: pointer;">
                   <i class="fas fa-microphone"></i>
                 </div>
                 <div class="record-status-text" id="record-status" style="font-size: 12px;">Chưa ghi âm</div>
-                <strong style="font-size: 13px; color: #ffffff;" id="record-time-text">00:00</strong>
+                <strong style="font-size: 13px; color: var(--text-main);" id="record-time-text">00:00</strong>
               </div>
 
               <div style="font-size: 12px; font-weight: 700; color: #6b7280;">HOẶC</div>
 
               <!-- Option 2: Upload audio file -->
               <div style="flex: 1; min-width: 220px; background: rgba(255,255,255,0.02); padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
-                <div style="font-size: 12px; font-weight: 600; color: #9ca3af; margin-bottom: 12px;">Tải file âm thanh từ máy</div>
+                <div style="font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 12px;">Tải file âm thanh từ máy</div>
                 <label for="contrib-file" class="btn btn-secondary" style="font-size: 12px; padding: 8px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
                   <i class="fas fa-upload"></i> Chọn file (.mp3, .wav, .m4a)
                 </label>
@@ -1021,16 +1132,74 @@
             </div>
 
             <!-- Audio Preview element -->
-            <div id="contrib-audio-preview-box" style="display: none; margin-top: 14px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;">
+            <div id="contrib-audio-preview-box" style="display: none; margin-top: 14px; background: var(--bg-main); padding: 10px; border-radius: 8px;">
               <div style="font-size: 11px; color: #10b981; margin-bottom: 6px;"><i class="fas fa-check-circle"></i> Đã sẵn sàng bản ghi âm:</div>
               <audio id="contrib-audio-preview" controls style="width: 100%; height: 36px;"></audio>
             </div>
           </div>
 
-          <!-- Non-commercial Copyright Commitment Checkbox -->
+          <!-- Siêu dữ liệu học thuật: không bắt buộc nhưng làm bản ghi
+               trích dẫn và tái sử dụng được -->
+          <details class="contrib-meta" style="margin-top: 16px; border: 1px solid var(--border-color); border-radius: 9px; padding: 12px;">
+            <summary style="cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-main);">
+              <i class="fas fa-flask"></i> Thông tin nghiên cứu <span style="font-weight:400;color:var(--text-muted)">— không bắt buộc, nhưng giúp bản ghi có giá trị khoa học hơn</span>
+            </summary>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px;">
+              <div>
+                <label class="form-label" for="contrib-recorded-at">Ngày ghi âm</label>
+                <input class="form-input" type="date" id="contrib-recorded-at">
+              </div>
+              <div>
+                <label class="form-label" for="contrib-locality">Xã / huyện</label>
+                <input class="form-input" type="text" id="contrib-locality" maxlength="190" placeholder="VD: xã Nghi Lộc, huyện Nghi Xuân">
+              </div>
+              <div>
+                <label class="form-label" for="contrib-collector">Người thu thập</label>
+                <input class="form-input" type="text" id="contrib-collector" maxlength="190" placeholder="Tên người thực hiện ghi âm">
+              </div>
+              <div>
+                <label class="form-label" for="contrib-device">Thiết bị ghi</label>
+                <input class="form-input" type="text" id="contrib-device" maxlength="190" placeholder="VD: iPhone 13, Zoom H1n">
+              </div>
+            </div>
+
+            <div style="margin-top: 10px;">
+              <label class="form-label" for="contrib-license">Giấy phép sử dụng</label>
+              <select class="form-input" id="contrib-license">
+                <option value="CC-BY-NC-4.0" selected>CC BY-NC 4.0 — ghi công, phi thương mại (khuyến nghị)</option>
+                <option value="CC-BY-4.0">CC BY 4.0 — ghi công tác giả</option>
+                <option value="CC-BY-SA-4.0">CC BY-SA 4.0 — ghi công, chia sẻ tương tự</option>
+                <option value="CC-BY-NC-SA-4.0">CC BY-NC-SA 4.0 — ghi công, phi thương mại, chia sẻ tương tự</option>
+                <option value="CC0-1.0">CC0 1.0 — hiến tặng cộng đồng</option>
+                <option value="ALL-RIGHTS-RESERVED">Bảo lưu mọi quyền — chỉ cho tra cứu tại chỗ</option>
+              </select>
+              <p style="margin: 6px 0 0; font-size: 11px; color: var(--text-muted); line-height: 1.5;">
+                Giấy phép quyết định người khác được dùng bản ghi của bạn tới đâu. Không chọn thì mặc định là CC BY-NC 4.0.
+              </p>
+            </div>
+
+            <div id="contrib-audio-meta" style="margin-top: 10px; font-size: 12px; color: var(--text-muted);"></div>
+          </details>
+
+          <!-- Đồng ý 1: bản quyền & lưu trữ — BẮT BUỘC -->
           <label class="consent-checkbox" style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer; margin-top: 14px;">
             <input type="checkbox" id="contrib-consent" required style="margin-top: 3px;" />
             <span style="font-size: 12px; color: var(--text-muted); line-height: 1.5;">Tôi xin cam kết bản quyền đoạn ghi âm này thuộc quyền sở hữu cá nhân hoặc được sự cho phép hợp pháp, đồng ý cung cấp cho dự án phi thương mại "Ngân hàng Giọng nói Số Bắc Trung Bộ" vì mục đích bảo tồn văn hóa và nghiên cứu. *</span>
+          </label>
+
+          <!-- Đồng ý 2: nhân bản giọng — TÁCH RIÊNG, KHÔNG BẮT BUỘC -->
+          <label class="consent-checkbox consent-clone" style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer; margin-top: 12px; padding: 12px; border: 1px solid var(--color-warning); border-radius: 9px; background: rgba(245, 158, 11, 0.06);">
+            <input type="checkbox" id="contrib-consent-clone" style="margin-top: 3px;" />
+            <span style="font-size: 12px; color: var(--text-muted); line-height: 1.5;">
+              <strong style="color: var(--text-main);">
+                <i class="fas fa-triangle-exclamation" style="color: var(--color-warning);"></i>
+                Tuỳ chọn — Cho phép nhân bản giọng (Voice Cloning)
+              </strong><br>
+              Tôi đồng ý cho dự án dùng giọng nói của tôi trong bản ghi này làm mẫu để máy tổng hợp ra câu nói mới bằng chính giọng tôi, phục vụ nghiên cứu ngữ âm phương ngữ.
+              <strong>Không tích ô này thì bản ghi vẫn được nhận bình thường</strong> và sẽ không bao giờ bị dùng làm giọng mẫu.
+              Tôi có thể yêu cầu rút lại đồng ý này bất cứ lúc nào.
+            </span>
           </label>
 
         </form>
@@ -1046,7 +1215,7 @@
   <!-- MODAL: AI PROCESSING PIPELINE LOADER -->
   <!-- ========================================== -->
   <div class="modal-overlay" id="ai-pipeline-modal" style="z-index: 101;">
-    <div class="modal-card" style="width: 480px; text-align: center; background: #0f172a; border-radius: 16px; border: 1px solid var(--border-color);">
+    <div class="modal-card" style="width: 480px; text-align: center; background: var(--bg-surface-solid); border-radius: 16px; border: 1px solid var(--border-color);">
       <div class="modal-header" style="justify-content: center;">
         <h3 style="font-size: 17px;"><i class="fas fa-brain" style="color: #0ea5e9;"></i> AI Analyzing Audio Stream</h3>
       </div>
@@ -1065,16 +1234,16 @@
             <span class="wave-bar"></span>
           </div>
 
-          <strong style="font-size: 15px; color: #ffffff; display: block; margin-bottom: 16px;">Đang phân tích tệp âm thanh qua Pipeline AI...</strong>
-          
-          <div class="ai-steps" style="text-align: left; background: rgba(0,0,0,0.3); padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
+          <strong style="font-size: 15px; color: var(--text-main); display: block; margin-bottom: 16px;">Đang xử lý tệp âm thanh...</strong>
+
+          <div class="ai-steps" style="text-align: left; background: var(--bg-main); padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
             <div class="ai-step pending" id="step-audeering" style="margin-bottom: 10px; display: flex; align-items: center; gap: 10px; font-size: 13px;">
               <i class="far fa-circle"></i>
-              <span>Trích xuất độ tuổi bằng AI audEERING</span>
+              <span>Đo thời lượng và tần số lấy mẫu</span>
             </div>
             <div class="ai-step pending" id="step-purity" style="margin-bottom: 10px; display: flex; align-items: center; gap: 10px; font-size: 13px;">
               <i class="far fa-circle"></i>
-              <span>Tính % độ thuần giọng tỉnh thành</span>
+              <span>Tải tệp lên máy chủ</span>
             </div>
             <div class="ai-step pending" id="step-stt" style="margin-bottom: 10px; display: flex; align-items: center; gap: 10px; font-size: 13px;">
               <i class="far fa-circle"></i>
@@ -1094,12 +1263,12 @@
   <!-- MODAL: CONTRIBUTION SUCCESS NOTIFICATION -->
   <!-- ========================================== -->
   <div class="modal-overlay" id="contrib-success-modal" style="z-index: 105;">
-    <div class="modal-card" style="width: 460px; text-align: center; padding: 28px; background: #0f172a; border-radius: 16px; border: 1px solid var(--border-color); box-shadow: 0 20px 50px rgba(0,0,0,0.7);">
+    <div class="modal-card" style="width: 460px; text-align: center; padding: 28px; background: var(--bg-surface-solid); border-radius: 16px; border: 1px solid var(--border-color); box-shadow: 0 20px 50px rgba(0,0,0,0.7);">
       <div style="width: 68px; height: 68px; background: rgba(34, 197, 94, 0.15); border: 2px solid #22c55e; color: #22c55e; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px; margin: 0 auto 16px auto; box-shadow: 0 0 25px rgba(34, 197, 94, 0.35);">
         <i class="fas fa-check"></i>
       </div>
       
-      <h3 style="font-size: 20px; font-weight: 700; color: #ffffff; margin-bottom: 8px;">Đã gửi bản ghi thành công!</h3>
+      <h3 style="font-size: 20px; font-weight: 700; color: var(--text-main); margin-bottom: 8px;">Đã gửi bản ghi thành công!</h3>
       <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 18px;">
         Cảm ơn bạn đã đóng góp giọng nói cho dự án bảo tồn Ngân hàng Giọng nói Số Bắc Trung Bộ.
       </p>
@@ -1108,7 +1277,7 @@
         <div style="font-size: 11px; font-weight: 700; color: var(--color-primary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
           <i class="fas fa-brain"></i> Kết quả phân tích AI Tự động:
         </div>
-        <div id="success-analysis-match" style="font-size: 13px; color: #ffffff; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+        <div id="success-analysis-match" style="font-size: 13px; color: var(--text-main); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
         </div>
         <div id="success-analysis-target" style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">
         </div>
@@ -1144,7 +1313,7 @@
             </div>
             <div class="form-group">
               <label for="word-region">Cụm Phương ngữ phân vùng *</label>
-              <select class="form-control" id="word-region" required style="background-color:#0f1726; color:white;">
+              <select class="form-control" id="word-region" required style="background-color:#0f1726; color: var(--text-main);">
                 <option value="" disabled selected>Chọn cụm</option>
                 <option value="Thanh Hóa">Thanh Hóa</option>
                 <option value="Nghệ Tĩnh">Nghệ Tĩnh (Nghệ An, Hà Tĩnh)</option>
@@ -1246,7 +1415,7 @@
   <!-- MODAL: REPORT AUDIO VIOLATION -->
   <!-- ========================================== -->
   <div class="modal-overlay" id="report-audio-modal" style="z-index: 120;">
-    <div class="modal-card" style="max-width: 480px; background: #0f172a; border-radius: 16px; border: 1px solid var(--border-color);">
+    <div class="modal-card" style="max-width: 480px; background: var(--bg-surface-solid); border-radius: 16px; border: 1px solid var(--border-color);">
       <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px;">
         <h3 style="font-size: 16px; color: #ef4444;"><i class="fas fa-flag" style="color: #ef4444; margin-right: 6px;"></i> Báo Cáo Bản Ghi Âm Vi Phạm</h3>
         <button class="close-modal" id="close-report-modal-btn">&times;</button>
@@ -1261,22 +1430,22 @@
           <input type="hidden" id="report-audio-id" value="" />
           
           <div class="form-group" style="margin-bottom: 16px;">
-            <label style="font-weight: 700; font-size: 13px; color: #ffffff; margin-bottom: 10px; display: block;">Chọn lý do báo cáo vi phạm *</label>
+            <label style="font-weight: 700; font-size: 13px; color: var(--text-main); margin-bottom: 10px; display: block;">Chọn lý do báo cáo vi phạm *</label>
             
             <div class="report-reasons-list" style="display: flex; flex-direction: column; gap: 8px;">
-              <label class="radio-reason-label" style="display: flex; align-items: center; gap: 10px; font-size: 13px; cursor: pointer; background: rgba(15, 23, 42, 0.8); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); color: #e2e8f0;">
+              <label class="radio-reason-label" style="display: flex; align-items: center; gap: 10px; font-size: 13px; cursor: pointer; background: var(--bg-surface-solid); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted);">
                 <input type="radio" name="report-reason" value="Sai vị trí tỉnh/thành" checked />
                 <span>📍 Sai vị trí tỉnh/thành</span>
               </label>
-              <label class="radio-reason-label" style="display: flex; align-items: center; gap: 10px; font-size: 13px; cursor: pointer; background: rgba(15, 23, 42, 0.8); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); color: #e2e8f0;">
+              <label class="radio-reason-label" style="display: flex; align-items: center; gap: 10px; font-size: 13px; cursor: pointer; background: var(--bg-surface-solid); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted);">
                 <input type="radio" name="report-reason" value="Âm thanh hỏng / Không có tiếng" />
                 <span>🔇 Âm thanh hỏng / Không có tiếng</span>
               </label>
-              <label class="radio-reason-label" style="display: flex; align-items: center; gap: 10px; font-size: 13px; cursor: pointer; background: rgba(15, 23, 42, 0.8); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); color: #e2e8f0;">
+              <label class="radio-reason-label" style="display: flex; align-items: center; gap: 10px; font-size: 13px; cursor: pointer; background: var(--bg-surface-solid); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted);">
                 <input type="radio" name="report-reason" value="Nội dung vi phạm / Không phù hợp" />
                 <span>⚠️ Nội dung vi phạm / Không phù hợp</span>
               </label>
-              <label class="radio-reason-label" style="display: flex; align-items: center; gap: 10px; font-size: 13px; cursor: pointer; background: rgba(15, 23, 42, 0.8); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); color: #e2e8f0;">
+              <label class="radio-reason-label" style="display: flex; align-items: center; gap: 10px; font-size: 13px; cursor: pointer; background: var(--bg-surface-solid); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted);">
                 <input type="radio" name="report-reason" value="Lý do khác" />
                 <span>💬 Lý do khác</span>
               </label>
@@ -1284,8 +1453,8 @@
           </div>
 
           <div class="form-group" style="margin-bottom: 0;">
-            <label for="report-note" style="font-size: 12px; color: #9ca3af; margin-bottom: 6px; display: block;">Mô tả chi tiết bổ sung (tùy chọn)</label>
-            <textarea class="form-control" id="report-note" rows="3" placeholder="Nhập thêm mô tả chi tiết phản hồi cho Ban quản trị..." style="width: 100%; background: #070a14; color: #ffffff; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 10px 12px; font-size: 13px; resize: vertical;"></textarea>
+            <label for="report-note" style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px; display: block;">Mô tả chi tiết bổ sung (tùy chọn)</label>
+            <textarea class="form-control" id="report-note" rows="3" placeholder="Nhập thêm mô tả chi tiết phản hồi cho Ban quản trị..." style="width: 100%; background: #070a14; color: var(--text-main); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 10px 12px; font-size: 13px; resize: vertical;"></textarea>
           </div>
         </form>
       </div>
@@ -1296,13 +1465,31 @@
     </div>
   </div>
 
+  <!-- Hộp thoại đăng nhập / đăng ký -->
+  <div class="auth-modal-overlay" id="auth-modal">
+    <div class="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+      <div class="auth-modal-header">
+        <h3 id="auth-modal-title">Đăng nhập</h3>
+        <button class="auth-modal-close" id="auth-modal-close" aria-label="Đóng">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="auth-modal-body" id="auth-modal-body"></div>
+    </div>
+  </div>
+
   <!-- Leaflet Script for Map -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  
+
   <!-- App Custom Scripts -->
-  <script src="data.js"></script>
-  <script src="src/components/Minigames/MinigameEngine.js"></script>
-  <script src="games.js"></script>
-  <script src="app.js"></script>
+  <script src="/auth.js?v=202608181316"></script>
+  <script src="/data.js?v=202608181316"></script>
+  <script src="/src/components/Minigames/MinigameEngine.js?v=202608181316"></script>
+  <script src="/games.js?v=202608181316"></script>
+  <script src="/app.js?v=202608181316"></script>
+  <script src="/archive.js?v=202608181316"></script>
+  <script src="/contribute.js?v=202608181316"></script>
+  <script src="/admin.js?v=202608181316"></script>
+  <script src="/tts.js?v=202608181316"></script>
 </body>
 </html>

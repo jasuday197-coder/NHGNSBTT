@@ -1,0 +1,562 @@
+/* ==========================================================================
+   KHO NGỮ LIỆU — duyệt, tìm kiếm, trang bản ghi, độ phủ
+   ========================================================================== */
+
+.archive-header { padding: 24px 24px 8px; }
+
+.archive-header h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.archive-header h2 .fas { color: var(--color-primary); }
+
+.archive-header p {
+  max-width: 780px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+/* --- Độ phủ dữ liệu ---------------------------------------------------- */
+
+.coverage-panel:not(:empty) {
+  margin: 16px 24px;
+  padding: 18px 20px;
+  background: var(--bg-surface-solid);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+}
+
+.coverage-panel h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.coverage-hint {
+  margin: 0 0 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.coverage-row {
+  display: grid;
+  grid-template-columns: 120px 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 5px 0;
+  font-size: 12px;
+}
+
+.coverage-name { font-weight: 600; color: var(--text-main); }
+
+.coverage-bar {
+  height: 8px;
+  overflow: hidden;
+  background: var(--bg-main);
+  border-radius: 99px;
+}
+
+.coverage-bar > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+  border-radius: 99px;
+}
+
+.coverage-num { color: var(--text-muted); white-space: nowrap; }
+
+.coverage-row.gap .coverage-name { color: var(--color-danger); }
+
+.coverage-flag {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-danger);
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 99px;
+  white-space: nowrap;
+}
+
+/* --- Khu vực tải về ---------------------------------------------------- */
+
+.archive-download {
+  margin: 16px 24px;
+  padding: 18px 20px;
+  background: var(--bg-surface-solid);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+}
+
+.archive-download h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.archive-download > p {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.archive-download code {
+  padding: 1px 5px;
+  font-size: 11px;
+  background: var(--bg-main);
+  border-radius: 4px;
+}
+
+.archive-download-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.archive-download-links a {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: none;
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  transition: var(--transition-smooth);
+}
+
+.archive-download-links a:hover {
+  color: var(--text-white);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.archive-api { margin-top: 14px; }
+
+.archive-api summary {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.archive-api pre {
+  margin: 10px 0 0;
+  padding: 12px;
+  overflow-x: auto;
+  font-size: 11px;
+  line-height: 1.65;
+  color: var(--text-main);
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+/* --- Thanh tìm kiếm và lọc --------------------------------------------- */
+
+.archive-toolbar { padding: 8px 24px 4px; }
+
+.archive-search {
+  position: relative;
+  margin-bottom: 10px;
+}
+
+.archive-search .fas {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  color: var(--text-muted);
+  transform: translateY(-50%);
+}
+
+.archive-search input {
+  width: 100%;
+  padding: 12px 14px 12px 40px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-main);
+  background: var(--bg-surface-solid);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  outline: none;
+  transition: var(--transition-smooth);
+}
+
+.archive-search input:focus {
+  border-color: var(--border-color-focus);
+  box-shadow: var(--glow-cyan);
+}
+
+.archive-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.archive-filters select {
+  padding: 8px 12px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-main);
+  background: var(--bg-surface-solid);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  outline: none;
+  cursor: pointer;
+}
+
+/* --- Danh sách kết quả -------------------------------------------------- */
+
+.archive-count {
+  margin: 14px 24px 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.archive-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+  padding: 0 24px 20px;
+}
+
+.archive-card {
+  padding: 16px;
+  background: var(--bg-surface-solid);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.archive-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--glow-cyan);
+  transform: translateY(-2px);
+}
+
+.archive-card-top {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.archive-card-top h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--text-main);
+}
+
+.archive-dur {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  background: var(--bg-main);
+  border-radius: 99px;
+}
+
+.archive-meta {
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.archive-quote {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-style: italic;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.archive-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.archive-tag {
+  padding: 3px 9px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: 99px;
+}
+
+.archive-tag.lic { color: var(--color-purple); }
+
+.archive-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.archive-empty .fas { font-size: 30px; opacity: 0.35; }
+.archive-empty p { margin: 0; font-size: 13px; }
+
+/* --- Phân trang --------------------------------------------------------- */
+
+.archive-pager {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px 28px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.archive-page {
+  padding: 8px 14px;
+  color: var(--text-main);
+  background: var(--bg-surface-solid);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.archive-page:hover:not(.disabled) {
+  color: var(--text-white);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.archive-page.disabled { cursor: not-allowed; opacity: 0.4; }
+
+/* --- Trang riêng của bản ghi -------------------------------------------- */
+
+#record-panel { max-width: 780px; padding: 24px; margin: 0 auto; }
+
+.btn-archive-back {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 8px 14px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-surface-solid);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.btn-archive-back:hover { color: var(--color-primary); border-color: var(--color-primary); }
+
+.record-title {
+  margin: 0 0 6px;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--text-main);
+}
+
+.record-sub {
+  margin: 0 0 18px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.record-audio { width: 100%; margin-bottom: 22px; }
+
+.record-note {
+  margin: 0 0 22px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.record-block { margin-bottom: 22px; }
+
+.record-block h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.record-text {
+  margin: 0;
+  padding: 14px 16px;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--text-main);
+  background: var(--bg-surface-solid);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+}
+
+.record-text.dialect { font-style: italic; }
+.record-text.ipa { font-family: 'Charis SIL', 'Doulos SIL', 'Times New Roman', serif; }
+
+.record-table {
+  width: 100%;
+  overflow: hidden;
+  font-size: 13px;
+  background: var(--bg-surface-solid);
+  border: 1px solid var(--border-color);
+  border-collapse: collapse;
+  border-radius: 10px;
+}
+
+.record-table th,
+.record-table td {
+  padding: 9px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.record-table tr:last-child th,
+.record-table tr:last-child td { border-bottom: none; }
+
+.record-table th {
+  width: 190px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.record-table td { color: var(--text-main); }
+
+.record-cite {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+}
+
+.record-cite code {
+  flex: 1;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--text-main);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.record-cite button {
+  padding: 6px 12px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-white);
+  white-space: nowrap;
+  background: var(--color-primary);
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.record-bibtex { margin-top: 10px; }
+
+.record-bibtex summary {
+  padding-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+/* --- Màn hình nhỏ ------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .coverage-row { grid-template-columns: 100px 1fr; }
+  .coverage-num, .coverage-flag { grid-column: 2; font-size: 11px; }
+  .archive-grid { grid-template-columns: 1fr; padding: 0 16px 20px; }
+  .archive-toolbar, .archive-header { padding-right: 16px; padding-left: 16px; }
+  .coverage-panel:not(:empty), .archive-download { margin-right: 16px; margin-left: 16px; }
+  .record-table th { width: 130px; }
+  .record-cite { flex-direction: column; }
+}
+
+/* --- Phiên âm IPA trong từ điển ---------------------------------------- */
+
+.dict-detail-ipa {
+  display: inline-block;
+  margin-left: 10px;
+  font-family: 'Charis SIL', 'Doulos SIL', 'Times New Roman', serif;
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+/* --- Bảng trùng lặp trong khu quản trị --------------------------------- */
+
+.dup-panel { padding: 16px 0; }
+
+.dup-empty {
+  padding: 18px;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.dup-group {
+  margin-bottom: 12px;
+  padding: 14px;
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid var(--color-warning);
+  border-radius: 10px;
+}
+
+.dup-group-head {
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.dup-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-color);
+}
+
+.dup-item:first-of-type { border-top: none; }
+.dup-item strong { color: var(--text-main); }
+
+.dup-item a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.dup-item a:hover { text-decoration: underline; }
+
+.dup-badge {
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 99px;
+}
+
+.dup-badge.approved { color: #15803d; background: rgba(34, 197, 94, 0.14); }
+.dup-badge.pending  { color: #b45309; background: rgba(245, 158, 11, 0.16); }

@@ -1,0 +1,41 @@
+# Dat tai /etc/systemd/system/giongnoiso-tts.service
+# systemctl daemon-reload && systemctl enable --now giongnoiso-tts
+
+[Unit]
+Description=VieNeu-TTS cho giongnoiso.com
+After=network.target
+Before=giongnoiso.service
+
+[Service]
+Type=simple
+User=www
+Group=www
+WorkingDirectory=/www/wwwroot/giongnoiso.com
+# Doc bien TTS_* tu chinh .env cua ung dung
+EnvironmentFile=/www/wwwroot/giongnoiso.com/.env
+# ProtectHome chan /home nen phai doi cache HuggingFace vao trong thu muc app
+Environment=HF_HOME=/www/wwwroot/giongnoiso.com/tts/.cache
+Environment=XDG_CACHE_HOME=/www/wwwroot/giongnoiso.com/tts/.cache
+Environment=NUMBA_CACHE_DIR=/www/wwwroot/giongnoiso.com/tts/.cache/numba
+ExecStart=/www/wwwroot/giongnoiso.com/tts/.venv/bin/uvicorn tts.service:app \
+          --host 127.0.0.1 --port 7862 --workers 1
+Restart=always
+RestartSec=10
+# Nap model lan dau co the ton vai phut
+TimeoutStartSec=600
+StandardOutput=append:/www/wwwroot/giongnoiso.com/logs/tts.log
+StandardError=append:/www/wwwroot/giongnoiso.com/logs/tts-error.log
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/www/wwwroot/giongnoiso.com/tts_cache /www/wwwroot/giongnoiso.com/logs /www/wwwroot/giongnoiso.com/tts/.cache
+ReadOnlyPaths=/www/wwwroot/giongnoiso.com/uploads
+ProtectKernelTunables=true
+RestrictSUIDSGID=true
+# Model ONNX ngon RAM; chinh theo dung luong VPS
+MemoryMax=3G
+
+[Install]
+WantedBy=multi-user.target

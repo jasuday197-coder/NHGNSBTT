@@ -1,0 +1,36 @@
+# Dat tai /etc/systemd/system/giongnoiso.service
+# systemctl daemon-reload && systemctl enable --now giongnoiso
+
+[Unit]
+Description=Ngan hang Giong noi So Bac Trung Bo
+Documentation=https://giongnoiso.com
+After=network.target mysqld.service
+Wants=mysqld.service
+
+[Service]
+Type=simple
+User=www
+Group=www
+WorkingDirectory=/www/wwwroot/giongnoiso.com
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+StandardOutput=append:/www/wwwroot/giongnoiso.com/logs/app.log
+StandardError=append:/www/wwwroot/giongnoiso.com/logs/error.log
+
+# --- Tang cung ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/www/wwwroot/giongnoiso.com/uploads /www/wwwroot/giongnoiso.com/logs
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target
