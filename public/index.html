@@ -12,14 +12,14 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
   <!-- Core Custom Styles -->
-  <link rel="stylesheet" href="/style.css?v=202608181316" />
-  <link rel="stylesheet" href="/navbar.css?v=202608181316" />
-  <link rel="stylesheet" href="/auth.css?v=202608181316" />
-  <link rel="stylesheet" href="/archive.css?v=202608181316" />
-  <link rel="stylesheet" href="/admin.css?v=202608181316" />
-  <link rel="stylesheet" href="/theme-light.css?v=202608181316" />
-  <link rel="stylesheet" href="/tts.css?v=202608181316" />
-  <link rel="stylesheet" href="/src/components/Minigames/MinigameUI.css?v=202608181316" />
+  <link rel="stylesheet" href="/style.css?v=202608181716" />
+  <link rel="stylesheet" href="/navbar.css?v=202608181716" />
+  <link rel="stylesheet" href="/auth.css?v=202608181716" />
+  <link rel="stylesheet" href="/archive.css?v=202608181716" />
+  <link rel="stylesheet" href="/admin.css?v=202608181716" />
+  <link rel="stylesheet" href="/theme-light.css?v=202608181716" />
+  <link rel="stylesheet" href="/tts.css?v=202608181716" />
+  <link rel="stylesheet" href="/src/components/Minigames/MinigameUI.css?v=202608181716" />
 </head>
 <body>
 
@@ -38,16 +38,16 @@
       </div>
       
       <ul class="navbar-menu">
-        <li class="navbar-link active" data-view="home-view">Trang chủ</li>
-        <li class="navbar-link" data-view="map-view">Bản đồ</li>
-        <li class="navbar-link" data-view="dictionary-view">Từ điển</li>
-        <li class="navbar-link" data-view="translator-view">Dịch thuật</li>
-        <li class="navbar-link" data-view="chatbot-view">Chatbot Chuyên gia</li>
-        <li class="navbar-link" data-view="quizzes-view">Trò chơi</li>
-        <li class="navbar-link" data-view="archive-view">Kho ngữ liệu</li>
-        <li class="navbar-link" data-view="contribute-view">Cần đóng góp</li>
-        <li class="navbar-link" data-view="tts-view">Giọng nói AI</li>
-        <li class="navbar-link" data-view="admin-view" data-requires-admin style="display:none">Admin</li>
+        <li class="navbar-link active" data-view="home-view"><a href="/" data-route>Trang chủ</a></li>
+        <li class="navbar-link" data-view="map-view"><a href="/ban-do" data-route>Bản đồ</a></li>
+        <li class="navbar-link" data-view="dictionary-view"><a href="/tu-dien" data-route>Từ điển</a></li>
+        <li class="navbar-link" data-view="translator-view"><a href="/dich-thuat" data-route>Dịch thuật</a></li>
+        <li class="navbar-link" data-view="chatbot-view"><a href="/chatbot" data-route>Chatbot Chuyên gia</a></li>
+        <li class="navbar-link" data-view="quizzes-view"><a href="/tro-choi" data-route>Trò chơi</a></li>
+        <li class="navbar-link" data-view="archive-view"><a href="/kho-ngu-lieu" data-route>Kho ngữ liệu</a></li>
+        <li class="navbar-link" data-view="contribute-view"><a href="/can-dong-gop" data-route>Cần đóng góp</a></li>
+        <li class="navbar-link" data-view="tts-view"><a href="/giong-noi-ai" data-route>Giọng nói AI</a></li>
+        <li class="navbar-link" data-view="admin-view" data-requires-admin style="display:none"><a href="/admin" data-route>Admin</a></li>
       </ul>
       
       <div class="header-stats">
@@ -1482,14 +1482,15 @@ Tối đa 100 bản ghi mỗi trang.</code></pre>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <!-- App Custom Scripts -->
-  <script src="/auth.js?v=202608181316"></script>
-  <script src="/data.js?v=202608181316"></script>
-  <script src="/src/components/Minigames/MinigameEngine.js?v=202608181316"></script>
-  <script src="/games.js?v=202608181316"></script>
-  <script src="/app.js?v=202608181316"></script>
-  <script src="/archive.js?v=202608181316"></script>
-  <script src="/contribute.js?v=202608181316"></script>
-  <script src="/admin.js?v=202608181316"></script>
-  <script src="/tts.js?v=202608181316"></script>
+  <script src="/auth.js?v=202608181716"></script>
+  <script src="/router.js?v=202608181716"></script>
+  <script src="/data.js?v=202608181716"></script>
+  <script src="/src/components/Minigames/MinigameEngine.js?v=202608181716"></script>
+  <script src="/games.js?v=202608181716"></script>
+  <script src="/app.js?v=202608181716"></script>
+  <script src="/archive.js?v=202608181716"></script>
+  <script src="/contribute.js?v=202608181716"></script>
+  <script src="/admin.js?v=202608181716"></script>
+  <script src="/tts.js?v=202608181716"></script>
 </body>
 </html>

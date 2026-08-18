@@ -226,21 +226,33 @@ function updateGlobalStats() {
 // Navigation Router
 // --------------------------------------------------------------------------
 function setupNavigation() {
-  const navItems = document.querySelectorAll('.navbar-link');
-  navItems.forEach(item => {
-    item.addEventListener('click', () => {
-      const targetView = item.getAttribute('data-view');
-      switchTab(targetView);
+  document.querySelectorAll('.navbar-link').forEach(item => {
+    item.addEventListener('click', (event) => {
+      // Mục navbar giờ bọc thẻ <a data-route>; router.js đã xử lý cú bấm đó.
+      // Bỏ qua ở đây để không điều hướng hai lần.
+      if (event.target.closest('a[data-route]')) return;
+      switchTab(item.getAttribute('data-view'));
     });
   });
 }
 
-function switchTab(viewId) {
+/**
+ * @param {string} viewId
+ * @param {{fromRouter?: boolean}} [opts] fromRouter = do router gọi vào,
+ *        khi đó KHÔNG đẩy lại history (tránh vòng lặp).
+ */
+function switchTab(viewId, opts) {
+  const fromRouter = Boolean(opts && opts.fromRouter);
+
   // Chặn ở phía giao diện; server vẫn kiểm tra quyền độc lập trên mỗi API
   if (viewId === 'admin-view' && !(window.GNS_AUTH && window.GNS_AUTH.isAdmin())) {
     window.GNS_AUTH && window.GNS_AUTH.requireLogin('Khu vực quản trị chỉ dành cho quản trị viên.');
+    // Chưa đủ quyền mà URL đang là /admin thì đưa về trang chủ cho khớp
+    if (fromRouter && window.GNS_ROUTER) window.GNS_ROUTER.syncUrl('home-view', { replace: true });
     return;
   }
+
+  if (!fromRouter && window.GNS_ROUTER) window.GNS_ROUTER.syncUrl(viewId);
 
   activeTab = viewId;
 
@@ -323,7 +335,7 @@ function initMapModule() {
   const mapWrapper = document.getElementById('geojson-map-container');
 
   // Load geojson
-  fetch('/vietnam.geojson?v=202608181316')
+  fetch('/vietnam.geojson?v=202608181716')
     .then(res => res.json())
     .then(geojson => {
       cachedGeojsonData = geojson;

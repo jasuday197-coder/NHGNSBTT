@@ -190,8 +190,9 @@
 
   async function openRecord(slug) {
     if (!slug) return;
-    if (typeof window.switchTab === 'function') window.switchTab('record-view');
+    if (typeof window.switchTab === 'function') window.switchTab('record-view', { fromRouter: true });
     history.pushState({ slug }, '', `/ban-ghi/${slug}`);
+    document.title = 'Đang tải bản ghi…';
     await renderRecord(slug);
   }
 
@@ -302,9 +303,9 @@
   state.renderRecord = renderRecord;
 
   function backToArchive() {
-    history.pushState({}, '', '/');
-    document.title = 'Ngân hàng Giọng nói Số Bắc Trung Bộ';
-    if (typeof window.switchTab === 'function') window.switchTab('archive-view');
+    // Router lo phần URL và tiêu đề
+    if (window.GNS_ROUTER) window.GNS_ROUTER.go('/kho-ngu-lieu');
+    else if (typeof window.switchTab === 'function') window.switchTab('archive-view');
   }
 
   state.backToArchive = backToArchive;
@@ -404,22 +405,8 @@
   // Khởi động: nếu vào thẳng permalink thì mở luôn bản ghi đó
   // ------------------------------------------------------------------
 
-  function routeFromPath() {
-    const m = location.pathname.match(/^\/ban-ghi\/([A-Za-z0-9._-]+)$/);
-    if (!m) return false;
-    if (typeof window.switchTab === 'function') window.switchTab('record-view');
-    renderRecord(m[1]);
-    return true;
-  }
-
-  window.addEventListener('popstate', () => {
-    if (!routeFromPath() && typeof window.switchTab === 'function') {
-      window.switchTab('archive-view');
-    }
-  });
-
+  // Định tuyến do router.js lo; ở đây chỉ nạp phần độ phủ.
   document.addEventListener('DOMContentLoaded', () => {
-    // Đợi app.js dựng xong khung rồi mới định tuyến
-    setTimeout(() => { routeFromPath(); renderCoverage(); }, 300);
+    setTimeout(renderCoverage, 300);
   });
 })();

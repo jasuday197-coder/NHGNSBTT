@@ -68,3 +68,20 @@
 }
 
 /* Dưới 768px đã có sẵn bộ quy tắc di động trong style.css */
+
+/* --- Mục navbar là link thật -------------------------------------------
+   Bọc <a> để mở tab mới / bookmark / SEO được, nhưng nhìn vẫn như tab.
+   JS chặn bấm thường để chuyển trong SPA, Ctrl+click vẫn mở tab mới. */
+
+.navbar-link > a {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  /* Nới vùng bấm ra hết ô cha, tránh bấm trúng mép mà không ăn */
+  margin: -6px -10px;
+  padding: 6px 10px;
+  border-radius: inherit;
+}
+
+.navbar-link > a:hover,
+.navbar-link > a:focus-visible { color: inherit; text-decoration: none; }

@@ -18,6 +18,20 @@ const adminRoutes = require('./lib/routes/admin');
 const exportRoutes = require('./lib/routes/export');
 const ttsRoutes = require('./lib/routes/tts');
 
+/**
+ * Duong dan thuoc giao dien (SPA), khong phai tep tinh cung khong phai API.
+ * Phai khop danh sach trong public/router.js.
+ */
+const APP_ROUTES = new Set([
+  '/', '/ban-do', '/tu-dien', '/dich-thuat', '/chatbot',
+  '/tro-choi', '/kho-ngu-lieu', '/can-dong-gop', '/giong-noi-ai', '/admin'
+]);
+
+function isAppRoute(pathname) {
+  const clean = pathname.replace(/\/+$/, '') || '/';
+  return APP_ROUTES.has(clean) || /^\/ban-ghi\/[A-Za-z0-9._-]+$/.test(clean);
+}
+
 /** Gan user hien tai (neu co) vao ngu canh request. */
 async function buildContext(req) {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
@@ -64,10 +78,9 @@ async function route(req, res) {
     throw new HttpError(404, 'Không tìm thấy API này.');
   }
 
-  // Permalink cua tung ban ghi -> tra ve khung SPA. Phai xet TRUOC
-  // staticFiles vi duong dan nay khong co duoi tep, static se tra 404.
-  // Frontend doc location.pathname roi goi /api/audio/<slug>.
-  if (ctx.pathname.startsWith('/ban-ghi/')) {
+  // Cac duong dan cua giao dien -> tra ve khung SPA, frontend tu mo dung muc.
+  // Phai xet TRUOC staticFiles vi chung khong co duoi tep nen static se tra 404.
+  if (isAppRoute(ctx.pathname)) {
     if (await staticFiles.serve(req, res, '/index.html')) return;
   }
 
