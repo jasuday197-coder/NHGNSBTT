@@ -99,7 +99,7 @@ const DIALECT_LEXICON = [
       "Nghệ An",
       "Hà Tĩnh"
     ],
-    "meaning": "gác bếp / già, già \"dạo ni nhìn mi tra rứa, già \"vd: dạo ni nhìn mi tra rứa",
+    "meaning": "gác bếp / già",
     "example": "Cơn xoài ni tra rồi, nỏ ra trấy nữa.",
     "exampleTranslation": "Cây xoài này già rồi, không ra trái nữa.",
     "culturalInsight": "Từ địa phương \"tra\" nghĩa là \"gác bếp / già\". Nguồn tham khảo: Tài liệu Studocu Ngoại Ngữ."
@@ -216,7 +216,7 @@ const DIALECT_LEXICON = [
       "Nghệ An",
       "Hà Tĩnh"
     ],
-    "meaning": "làm, làm \"mần chi",
+    "meaning": "làm",
     "example": "Mấy đứa đang mần chi rứa?",
     "exampleTranslation": "Mấy đứa đang làm gì thế?",
     "culturalInsight": "Từ địa phương \"mần\" nghĩa là \"làm\". Nguồn tham khảo: Tài liệu Studocu Ngoại Ngữ."
@@ -4970,6 +4970,167 @@ const DIALECT_LEXICON = [
 // Kho B: Corpus Audio có nhãn (Audio Database)
 // Nhãn chủ đề gồm: "Lịch sử & Văn hóa", "Giọng ca đặc trưng (Ví Giặm, Ca Huế...)", "Tổng quan vùng (Địa lý, Đời sống...)"
 const AUDIO_CORPUS = [
+  {
+    "id": "speech_1786076763715",
+    "title": "xứ huế quê tôi",
+    "province": "Thừa Thiên Huế",
+    "dialectGroup": "Bình Trị Thiên",
+    "speaker": "Ẩn danh",
+    "ageGroup": "18-35",
+    "gender": "Nam",
+    "topic": "Lịch sử văn hóa",
+    "audioUrl": "/uploads/speech_1786076762828.ogg",
+    "transcriptDialect": "Huy là quê hương của tôi, nơi đấy có nhiều cảnh đẹp, có người chân chất và có dòng nổi rất riêng. Tôi muốn gọi một phân nhò để lưu giữ tình nổi của quê mình.",
+    "transcriptStandard": "Huy là quê hương của tôi, nơi đấy có nhiều cảnh đẹp, có người chân chất và có dòng nổi rất riêng. Tôi muốn gọi một phân nhò để lưu giữ tình nổi của quê mình.",
+    "verified": true,
+    "confidence": 92,
+    "tags": [
+      "Lịch",
+      "Thừa Thiên Huế"
+    ]
+  },
+  {
+    "id": "speech_1786076416660",
+    "title": "xứ huế quê tôi",
+    "province": "Thừa Thiên Huế",
+    "dialectGroup": "Bình Trị Thiên",
+    "speaker": "Ẩn danh",
+    "ageGroup": "18-35",
+    "gender": "Nam",
+    "topic": "Tổng quan vùng",
+    "audioUrl": "/uploads/speech_1786076415886.ogg",
+    "transcriptDialect": "Huy là quê hương của tôi, nơi đấy có nhiều cảnh đẹp, có người chân chất và có dòng nổi rất riêng. Tôi muốn gọi một phân nhò để lưu giữ tình nổi của quê mình.",
+    "transcriptStandard": "Huy là quê hương của tôi, nơi đấy có nhiều cảnh đẹp, có người chân chất và có dòng nổi rất riêng. Tôi muốn gọi một phân nhò để lưu giữ tình nổi của quê mình.",
+    "verified": true,
+    "confidence": 95,
+    "tags": [
+      "Tổng",
+      "Thừa Thiên Huế"
+    ]
+  },
+  {
+    "id": "speech_1786075834677",
+    "title": "XỨ HUẾ QUÊ TÔI",
+    "province": "Thừa Thiên Huế",
+    "dialectGroup": "Bình Trị Thiên",
+    "speaker": "Ẩn danh",
+    "ageGroup": "18-35",
+    "gender": "Nam",
+    "topic": "Tổng quan vùng",
+    "audioUrl": "/uploads/speech_1786075833675.ogg",
+    "transcriptDialect": "Huy là quê hương của tôi, nơi đấy có nhiều cảnh đẹp, có người chân chất và có dòng nổi rất riêng. Tôi muốn gọi một phân nhò để lưu giữ tình nổi của quê mình.",
+    "transcriptStandard": "Huy là quê hương của tôi, nơi đấy có nhiều cảnh đẹp, có người chân chất và có dòng nổi rất riêng. Tôi muốn gọi một phân nhò để lưu giữ tình nổi của quê mình.",
+    "verified": true,
+    "confidence": 90,
+    "tags": [
+      "Tổng",
+      "Thừa Thiên Huế"
+    ]
+  },
+  {
+    "id": "yt_1785982902246",
+    "title": "Giọng nói Quảng Trị - Đinh Thanh Hải 02",
+    "province": "Thanh Hóa",
+    "dialectGroup": "Thanh Hóa",
+    "speaker": "YouTube Media",
+    "ageGroup": "36-55",
+    "gender": "Khác",
+    "topic": "Lịch sử & Văn hóa",
+    "audioUrl": "",
+    "youtube_url": "https://www.youtube.com/watch?v=G1KB581A0gk",
+    "start_time": 134,
+    "end_time": 157,
+    "transcriptDialect": "Bản ghi từ YouTube (Chỉ phát âm thanh)",
+    "transcriptStandard": "Bản ghi từ YouTube (Chỉ phát âm thanh)",
+    "verified": true,
+    "confidence": 95,
+    "tags": [
+      "YouTube",
+      "Thanh Hóa"
+    ]
+  },
+  {
+    "id": "yt_1785982832919",
+    "title": "Giọng nói Quảng Trị - Đinh Thanh Hải",
+    "province": "Quảng Trị",
+    "dialectGroup": "Bình Trị Thiên",
+    "speaker": "YouTube Media",
+    "ageGroup": "36-55",
+    "gender": "Khác",
+    "topic": "Lịch sử & Văn hóa",
+    "audioUrl": "",
+    "youtube_url": "https://www.youtube.com/watch?v=G1KB581A0gk",
+    "start_time": 122,
+    "end_time": 133,
+    "transcriptDialect": "Bản ghi từ YouTube (Chỉ phát âm thanh)",
+    "transcriptStandard": "Bản ghi từ YouTube (Chỉ phát âm thanh)",
+    "verified": true,
+    "confidence": 95,
+    "tags": [
+      "YouTube",
+      "Quảng Trị"
+    ]
+  },
+  {
+    "id": "speech_1785982190513",
+    "title": "Hà Tĩnh 01",
+    "province": "Hà Tĩnh",
+    "dialectGroup": "Nghệ Tĩnh",
+    "speaker": "Ẩn danh",
+    "ageGroup": "<18",
+    "gender": "Nam",
+    "topic": "Tổng quan vùng",
+    "audioUrl": "/uploads/speech_1785982189722.mp3",
+    "transcriptDialect": "Hà Tình Cung Bùi Hè là vương đất của dân ca Vĩ, dám nghe tình nhưng câu hát Vĩ dám mộc mạc và xấu lắm, thường nói về tình quê và đối xử lão đồng. Nghe một câu hát quê minh, tôi luôn thấy rất thân thương và gần gùi.",
+    "transcriptStandard": "Hà Tình Cung Bùi Hè là vương đất của dân ca Vĩ, dám nghe tình nhưng câu hát Vĩ dám mộc mạc và xấu lắm, thường nói về tình quê và đối xử lão đồng. Nghe một câu hát quê minh, tôi luôn thấy rất thân thương và gần gùi.",
+    "verified": true,
+    "confidence": 95,
+    "tags": [
+      "Tổng",
+      "Hà Tĩnh"
+    ]
+  },
+  {
+    "id": "yt_1785981814270",
+    "title": "Ca Huế: Hò Mái Nhì, Nam Bình - Dạ Lê, Bến Thành Audio Video",
+    "province": "Thừa Thiên Huế",
+    "dialectGroup": "Bình Trị Thiên",
+    "speaker": "YouTube Media",
+    "ageGroup": "36-55",
+    "gender": "Khác",
+    "topic": "Giọng ca đặc trưng (Ví Giặm, Ca Huế...)",
+    "audioUrl": "",
+    "youtube_url": "https://www.youtube.com/watch?v=gpIX94R68yc",
+    "start_time": 0,
+    "end_time": 330,
+    "transcriptDialect": "Bản ghi từ YouTube (Chỉ phát âm thanh)",
+    "transcriptStandard": "Bản ghi từ YouTube (Chỉ phát âm thanh)",
+    "verified": true,
+    "confidence": 95,
+    "tags": [
+      "YouTube",
+      "Thừa Thiên Huế"
+    ]
+  },
+  {
+    "id": "speech_1785940166113",
+    "title": "Xứ huế quê tôi",
+    "province": "Thừa Thiên Huế",
+    "dialectGroup": "Bình Trị Thiên",
+    "speaker": "Ẩn danh",
+    "ageGroup": "18-35",
+    "gender": "Nam",
+    "topic": "Tổng quan vùng",
+    "audioUrl": "/uploads/speech_1785940165313.ogg",
+    "transcriptDialect": "Huy là quê hương của tôi, nơi đấy có nhiều cảnh đẹp, có người chân chất và có dòng nổi rất riêng. Tôi muốn gọi một phân nhò để lưu giữ tình nổi của quê mình.",
+    "transcriptStandard": "Huy là quê hương của tôi, nơi đấy có nhiều cảnh đẹp, có người chân chất và có dòng nổi rất riêng. Tôi muốn gọi một phân nhò để lưu giữ tình nổi của quê mình.",
+    "verified": true,
+    "confidence": 96,
+    "tags": [
+      "Tổng",
+      "Thừa Thiên Huế"
+    ]
+  },
   {
     "id": "yt_1784202311657",
     "title": "TIẾNG NGHỆ AN",

@@ -153,6 +153,38 @@
                   <p class="feature-desc">Tham gia các trò chơi trắc nghiệm nghe giọng đoán vùng, giải nghĩa, ghép cặp từ vựng đầy thú vị.</p>
                   <button class="feature-btn" onclick="switchTab('quizzes-view')">Chơi ngay</button>
                 </div>
+
+                <!-- Card 5: Chatbot Chuyên gia -->
+                <div class="feature-card">
+                  <div class="feature-icon-wrapper"><i class="fas fa-robot"></i></div>
+                  <h4 class="feature-title">Chatbot Chuyên gia</h4>
+                  <p class="feature-desc">Hỏi đáp thông minh về văn hóa, lịch sử và phương ngữ Bắc Trung Bộ dựa trên công nghệ AI và kho dữ liệu ngôn ngữ bản địa.</p>
+                  <button class="feature-btn" onclick="switchTab('chatbot-view')">Trò chuyện ngay</button>
+                </div>
+
+                <!-- Card 6: Kho ngữ liệu -->
+                <div class="feature-card">
+                  <div class="feature-icon-wrapper"><i class="fas fa-database"></i></div>
+                  <h4 class="feature-title">Kho ngữ liệu</h4>
+                  <p class="feature-desc">Khai thác và tải về tập dữ liệu âm thanh mở được chuẩn hóa, phân loại nhân khẩu học chi tiết phục vụ học tập và nghiên cứu.</p>
+                  <button class="feature-btn" onclick="switchTab('archive-view')">Khám phá kho</button>
+                </div>
+
+                <!-- Card 7: Cần đóng góp -->
+                <div class="feature-card">
+                  <div class="feature-icon-wrapper"><i class="fas fa-hand-holding-heart"></i></div>
+                  <h4 class="feature-title">Cần đóng góp</h4>
+                  <p class="feature-desc">Theo dõi tiến độ và chỉ tiêu thu thập giọng nói theo từng tỉnh thành, hỗ trợ cân bằng mẫu ngữ liệu địa phương còn thiếu hụt.</p>
+                  <button class="feature-btn" onclick="switchTab('contribute-view')">Đóng góp ngay</button>
+                </div>
+
+                <!-- Card 8: Giọng nói AI -->
+                <div class="feature-card">
+                  <div class="feature-icon-wrapper"><i class="fas fa-wand-magic-sparkles"></i></div>
+                  <h4 class="feature-title">Giọng nói AI</h4>
+                  <p class="feature-desc">Tổng hợp và chuyển đổi văn bản thành giọng đọc mang âm sắc vùng miền tự nhiên, hỗ trợ nhân bản giọng đọc từ cộng đồng.</p>
+                  <button class="feature-btn" onclick="switchTab('tts-view')">Tạo giọng nói</button>
+                </div>
                 
               </div>
             </section>
@@ -736,16 +768,30 @@
 
           <!-- STEP 4: LEADERBOARD MODAL (TOP 10 + TABS) -->
           <div class="mg-modal-backdrop" id="mg-leaderboard-modal">
-            <div class="mg-modal-card" style="max-width: 560px;">
+            <div class="mg-modal-card" style="max-width: 580px;">
               <button class="mg-modal-close" onclick="window.voiceBankGames.closeLeaderboard()"><i class="fas fa-times"></i></button>
               <div class="mg-modal-header">
                 <h3><i class="fas fa-crown" style="color: #f59e0b;"></i> Bảng Xếp Hạng Top 10</h3>
                 <p>Danh sách các anh tài dẫn đầu kết quả thử thách phương ngữ Bắc Trung Bộ.</p>
               </div>
 
-              <div class="mg-leaderboard-tabs">
-                <button class="btn-mg-tab active" data-tab="all" onclick="window.voiceBankGames.renderLeaderboard('all')">Tất cả thời gian</button>
-                <button class="btn-mg-tab" data-tab="week" onclick="window.voiceBankGames.renderLeaderboard('week')">Tuần này</button>
+              <!-- Level 1: Game Selector Tabs -->
+              <div class="mg-game-tabs" id="mg-game-tabs">
+                <button class="btn-mg-game-tab active" data-game="1" onclick="window.voiceBankGames.switchLeaderboardGame(1)">
+                  <i class="fas fa-brain"></i> Game 1: Giải nghĩa
+                </button>
+                <button class="btn-mg-game-tab" data-game="2" onclick="window.voiceBankGames.switchLeaderboardGame(2)">
+                  <i class="fas fa-object-ungroup"></i> Game 2: Ghép cặp
+                </button>
+                <button class="btn-mg-game-tab" data-game="3" onclick="window.voiceBankGames.switchLeaderboardGame(3)">
+                  <i class="fas fa-border-all"></i> Game 3: Ô chữ
+                </button>
+              </div>
+
+              <!-- Level 2: Time Range Tabs -->
+              <div class="mg-leaderboard-tabs" id="mg-time-tabs">
+                <button class="btn-mg-tab active" data-time="all" onclick="window.voiceBankGames.switchLeaderboardTime('all')">Tất cả thời gian</button>
+                <button class="btn-mg-tab" data-time="week" onclick="window.voiceBankGames.switchLeaderboardTime('week')">Tuần này</button>
               </div>
 
               <div class="mg-lb-list" id="mg-lb-list">
@@ -1051,15 +1097,15 @@ Tối đa 100 bản ghi mỗi trang.</code></pre>
             <div class="form-group" style="flex: 2;">
               <label for="contrib-speaker">Tên người đóng góp *</label>
               <div style="display: flex; gap: 10px; align-items: center;">
-                <input type="text" class="form-control" id="contrib-speaker" placeholder="Nhập tên người nói" required style="flex: 1;" />
-                <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; white-space: nowrap; margin-bottom: 0;">
+                <input type="text" class="form-control" id="contrib-speaker" placeholder="Nhập tên người nói" required style="flex: 1; background-color:#1e293b; color: #f8fafc; border: 1px solid #334155;" />
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; white-space: nowrap; margin-bottom: 0; color: #e2e8f0;">
                   <input type="checkbox" id="contrib-anonymous" /> Ẩn danh
                 </label>
               </div>
             </div>
             <div class="form-group" style="flex: 1;">
               <label for="contrib-gender">Giới tính *</label>
-              <select class="form-control" id="contrib-gender" required style="background-color:#0f1726; color: var(--text-main);">
+              <select class="form-control" id="contrib-gender" required style="background-color:#1e293b; color: #f8fafc; border: 1px solid #334155;">
                 <option value="Nam">Nam</option>
                 <option value="Nữ">Nữ</option>
               </select>
@@ -1069,7 +1115,7 @@ Tối đa 100 bản ghi mỗi trang.</code></pre>
           <div class="form-row">
             <div class="form-group">
               <label for="contrib-province">Vùng / Tỉnh thành *</label>
-              <select class="form-control" id="contrib-province" required style="background-color:#0f1726; color: var(--text-main);">
+              <select class="form-control" id="contrib-province" required style="background-color:#1e293b; color: #f8fafc; border: 1px solid #334155;">
                 <option value="" disabled selected>Chọn 1 trong 6 tỉnh</option>
                 <option value="Thanh Hóa">Thanh Hóa</option>
                 <option value="Nghệ An">Nghệ An</option>
@@ -1081,7 +1127,7 @@ Tối đa 100 bản ghi mỗi trang.</code></pre>
             </div>
             <div class="form-group">
               <label for="contrib-age">Nhóm tuổi *</label>
-              <select class="form-control" id="contrib-age" required style="background-color:#0f1726; color: var(--text-main);">
+              <select class="form-control" id="contrib-age" required style="background-color:#1e293b; color: #f8fafc; border: 1px solid #334155;">
                 <option value="" disabled selected>Chọn nhóm tuổi</option>
                 <option value="<18">&lt;18 tuổi</option>
                 <option value="18-35">18-35 tuổi</option>
@@ -1094,7 +1140,7 @@ Tối đa 100 bản ghi mỗi trang.</code></pre>
 
           <div class="form-group">
             <label for="contrib-topic">Chủ đề nội dung *</label>
-            <select class="form-control" id="contrib-topic" required style="background-color:#0f1726; color: var(--text-main);">
+            <select class="form-control" id="contrib-topic" required style="background-color:#1e293b; color: #f8fafc; border: 1px solid #334155;">
               <option value="Lịch sử văn hóa">Lịch sử văn hóa (Truyền thuyết, câu chuyện cổ, di tích...)</option>
               <option value="Giọng ca đặc trưng">Giọng ca đặc trưng (Ví, Giặm, Ca Huế, hò sông nước...)</option>
               <option value="Tổng quan vùng">Tổng quan vùng (Đời sống sinh hoạt, phong tục, thói quen...)</option>
@@ -1102,28 +1148,28 @@ Tối đa 100 bản ghi mỗi trang.</code></pre>
           </div>
 
           <!-- AUDIO RECORD / FILE UPLOAD CONTAINER -->
-          <div style="background: var(--bg-main); border: 1px dashed var(--border-color); border-radius: 12px; padding: 16px; margin: 16px 0; text-align: center;">
-            <div style="font-weight: 700; font-size: 13px; color: var(--color-primary); margin-bottom: 12px;">
+          <div style="background: rgba(30, 41, 59, 0.5); border: 1px dashed #0ea5e9; border-radius: 12px; padding: 16px; margin: 16px 0; text-align: center;">
+            <div style="font-weight: 700; font-size: 13px; color: #38bdf8; margin-bottom: 12px;">
               <i class="fas fa-music"></i> CHỌN PHƯƠNG THỨC NỘP BẢN GHI ÂM (Micro trực tiếp HOẶC Tải tệp)
             </div>
 
             <div style="display: flex; justify-content: center; gap: 20px; align-items: center; flex-wrap: wrap;">
               <!-- Option 1: Mic Direct Recording -->
-              <div style="flex: 1; min-width: 220px; background: rgba(255,255,255,0.02); padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
-                <div style="font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px;">Ghi âm trực tiếp từ Micro</div>
+              <div style="flex: 1; min-width: 220px; background: rgba(15, 23, 42, 0.6); padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08);">
+                <div style="font-size: 12px; font-weight: 600; color: #94a3b8; margin-bottom: 8px;">Ghi âm trực tiếp từ Micro</div>
                 <div class="mic-circle" id="mic-trigger-btn" style="margin: 0 auto 8px auto; cursor: pointer;">
                   <i class="fas fa-microphone"></i>
                 </div>
-                <div class="record-status-text" id="record-status" style="font-size: 12px;">Chưa ghi âm</div>
-                <strong style="font-size: 13px; color: var(--text-main);" id="record-time-text">00:00</strong>
+                <div class="record-status-text" id="record-status" style="font-size: 12px; color: #94a3b8;">Chưa ghi âm</div>
+                <strong style="font-size: 13px; color: #f8fafc;" id="record-time-text">00:00</strong>
               </div>
 
               <div style="font-size: 12px; font-weight: 700; color: #6b7280;">HOẶC</div>
 
               <!-- Option 2: Upload audio file -->
-              <div style="flex: 1; min-width: 220px; background: rgba(255,255,255,0.02); padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
-                <div style="font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 12px;">Tải file âm thanh từ máy</div>
-                <label for="contrib-file" class="btn btn-secondary" style="font-size: 12px; padding: 8px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+              <div style="flex: 1; min-width: 220px; background: rgba(15, 23, 42, 0.6); padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08);">
+                <div style="font-size: 12px; font-weight: 600; color: #94a3b8; margin-bottom: 12px;">Tải file âm thanh từ máy</div>
+                <label for="contrib-file" class="btn btn-secondary" style="font-size: 12px; padding: 8px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #f8fafc;">
                   <i class="fas fa-upload"></i> Chọn file (.mp3, .wav, .m4a)
                 </label>
                 <input type="file" id="contrib-file" accept="audio/*, .mp3, .wav, .m4a" style="display: none;" />
@@ -1132,7 +1178,7 @@ Tối đa 100 bản ghi mỗi trang.</code></pre>
             </div>
 
             <!-- Audio Preview element -->
-            <div id="contrib-audio-preview-box" style="display: none; margin-top: 14px; background: var(--bg-main); padding: 10px; border-radius: 8px;">
+            <div id="contrib-audio-preview-box" style="display: none; margin-top: 14px; background: #0f172a; padding: 10px; border-radius: 8px; border: 1px solid #1e293b;">
               <div style="font-size: 11px; color: #10b981; margin-bottom: 6px;"><i class="fas fa-check-circle"></i> Đã sẵn sàng bản ghi âm:</div>
               <audio id="contrib-audio-preview" controls style="width: 100%; height: 36px;"></audio>
             </div>
@@ -1140,33 +1186,33 @@ Tối đa 100 bản ghi mỗi trang.</code></pre>
 
           <!-- Siêu dữ liệu học thuật: không bắt buộc nhưng làm bản ghi
                trích dẫn và tái sử dụng được -->
-          <details class="contrib-meta" style="margin-top: 16px; border: 1px solid var(--border-color); border-radius: 9px; padding: 12px;">
-            <summary style="cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-main);">
-              <i class="fas fa-flask"></i> Thông tin nghiên cứu <span style="font-weight:400;color:var(--text-muted)">— không bắt buộc, nhưng giúp bản ghi có giá trị khoa học hơn</span>
+          <details class="contrib-meta" style="margin-top: 16px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(30, 41, 59, 0.4); border-radius: 9px; padding: 12px;">
+            <summary style="cursor: pointer; font-size: 13px; font-weight: 600; color: #f8fafc;">
+              <i class="fas fa-flask" style="color: #38bdf8;"></i> Thông tin nghiên cứu <span style="font-weight:400;color:#94a3b8">— không bắt buộc, nhưng giúp bản ghi có giá trị khoa học hơn</span>
             </summary>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px;">
               <div>
-                <label class="form-label" for="contrib-recorded-at">Ngày ghi âm</label>
-                <input class="form-input" type="date" id="contrib-recorded-at">
+                <label class="form-label" for="contrib-recorded-at" style="color: #cbd5e1;">Ngày ghi âm</label>
+                <input class="form-input" type="date" id="contrib-recorded-at" style="background-color:#1e293b; color: #f8fafc; border: 1px solid #334155;">
               </div>
               <div>
-                <label class="form-label" for="contrib-locality">Xã / huyện</label>
-                <input class="form-input" type="text" id="contrib-locality" maxlength="190" placeholder="VD: xã Nghi Lộc, huyện Nghi Xuân">
+                <label class="form-label" for="contrib-locality" style="color: #cbd5e1;">Xã / huyện</label>
+                <input class="form-input" type="text" id="contrib-locality" maxlength="190" placeholder="VD: xã Nghi Lộc, huyện Nghi Xuân" style="background-color:#1e293b; color: #f8fafc; border: 1px solid #334155;">
               </div>
               <div>
-                <label class="form-label" for="contrib-collector">Người thu thập</label>
-                <input class="form-input" type="text" id="contrib-collector" maxlength="190" placeholder="Tên người thực hiện ghi âm">
+                <label class="form-label" for="contrib-collector" style="color: #cbd5e1;">Người thu thập</label>
+                <input class="form-input" type="text" id="contrib-collector" maxlength="190" placeholder="Tên người thực hiện ghi âm" style="background-color:#1e293b; color: #f8fafc; border: 1px solid #334155;">
               </div>
               <div>
-                <label class="form-label" for="contrib-device">Thiết bị ghi</label>
-                <input class="form-input" type="text" id="contrib-device" maxlength="190" placeholder="VD: iPhone 13, Zoom H1n">
+                <label class="form-label" for="contrib-device" style="color: #cbd5e1;">Thiết bị ghi</label>
+                <input class="form-input" type="text" id="contrib-device" maxlength="190" placeholder="VD: iPhone 13, Zoom H1n" style="background-color:#1e293b; color: #f8fafc; border: 1px solid #334155;">
               </div>
             </div>
 
             <div style="margin-top: 10px;">
-              <label class="form-label" for="contrib-license">Giấy phép sử dụng</label>
-              <select class="form-input" id="contrib-license">
+              <label class="form-label" for="contrib-license" style="color: #cbd5e1;">Giấy phép sử dụng</label>
+              <select class="form-input" id="contrib-license" style="background-color:#1e293b; color: #f8fafc; border: 1px solid #334155;">
                 <option value="CC-BY-NC-4.0" selected>CC BY-NC 4.0 — ghi công, phi thương mại (khuyến nghị)</option>
                 <option value="CC-BY-4.0">CC BY 4.0 — ghi công tác giả</option>
                 <option value="CC-BY-SA-4.0">CC BY-SA 4.0 — ghi công, chia sẻ tương tự</option>
@@ -1174,30 +1220,30 @@ Tối đa 100 bản ghi mỗi trang.</code></pre>
                 <option value="CC0-1.0">CC0 1.0 — hiến tặng cộng đồng</option>
                 <option value="ALL-RIGHTS-RESERVED">Bảo lưu mọi quyền — chỉ cho tra cứu tại chỗ</option>
               </select>
-              <p style="margin: 6px 0 0; font-size: 11px; color: var(--text-muted); line-height: 1.5;">
+              <p style="margin: 6px 0 0; font-size: 11px; color: #94a3b8; line-height: 1.5;">
                 Giấy phép quyết định người khác được dùng bản ghi của bạn tới đâu. Không chọn thì mặc định là CC BY-NC 4.0.
               </p>
             </div>
 
-            <div id="contrib-audio-meta" style="margin-top: 10px; font-size: 12px; color: var(--text-muted);"></div>
+            <div id="contrib-audio-meta" style="margin-top: 10px; font-size: 12px; color: #94a3b8;"></div>
           </details>
 
           <!-- Đồng ý 1: bản quyền & lưu trữ — BẮT BUỘC -->
-          <label class="consent-checkbox" style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer; margin-top: 14px;">
+          <label class="consent-checkbox" style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer; margin-top: 14px; background: rgba(30, 41, 59, 0.4); padding: 12px; border-radius: 9px; border: 1px solid rgba(255, 255, 255, 0.1);">
             <input type="checkbox" id="contrib-consent" required style="margin-top: 3px;" />
-            <span style="font-size: 12px; color: var(--text-muted); line-height: 1.5;">Tôi xin cam kết bản quyền đoạn ghi âm này thuộc quyền sở hữu cá nhân hoặc được sự cho phép hợp pháp, đồng ý cung cấp cho dự án phi thương mại "Ngân hàng Giọng nói Số Bắc Trung Bộ" vì mục đích bảo tồn văn hóa và nghiên cứu. *</span>
+            <span style="font-size: 12px; color: #cbd5e1; line-height: 1.5;">Tôi xin cam kết bản quyền đoạn ghi âm này thuộc quyền sở hữu cá nhân hoặc được sự cho phép hợp pháp, đồng ý cung cấp cho dự án phi thương mại "Ngân hàng Giọng nói Số Bắc Trung Bộ" vì mục đích bảo tồn văn hóa và nghiên cứu. *</span>
           </label>
 
           <!-- Đồng ý 2: nhân bản giọng — TÁCH RIÊNG, KHÔNG BẮT BUỘC -->
-          <label class="consent-checkbox consent-clone" style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer; margin-top: 12px; padding: 12px; border: 1px solid var(--color-warning); border-radius: 9px; background: rgba(245, 158, 11, 0.06);">
+          <label class="consent-checkbox consent-clone" style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer; margin-top: 12px; padding: 12px; border: 1px solid rgba(245, 158, 11, 0.5); border-radius: 9px; background: rgba(245, 158, 11, 0.08);">
             <input type="checkbox" id="contrib-consent-clone" style="margin-top: 3px;" />
-            <span style="font-size: 12px; color: var(--text-muted); line-height: 1.5;">
-              <strong style="color: var(--text-main);">
-                <i class="fas fa-triangle-exclamation" style="color: var(--color-warning);"></i>
+            <span style="font-size: 12px; color: #e2e8f0; line-height: 1.5;">
+              <strong style="color: #fbbf24;">
+                <i class="fas fa-triangle-exclamation" style="color: #f59e0b;"></i>
                 Tuỳ chọn — Cho phép nhân bản giọng (Voice Cloning)
               </strong><br>
               Tôi đồng ý cho dự án dùng giọng nói của tôi trong bản ghi này làm mẫu để máy tổng hợp ra câu nói mới bằng chính giọng tôi, phục vụ nghiên cứu ngữ âm phương ngữ.
-              <strong>Không tích ô này thì bản ghi vẫn được nhận bình thường</strong> và sẽ không bao giờ bị dùng làm giọng mẫu.
+              <strong style="color: #ffffff;">Không tích ô này thì bản ghi vẫn được nhận bình thường</strong> và sẽ không bao giờ bị dùng làm giọng mẫu.
               Tôi có thể yêu cầu rút lại đồng ý này bất cứ lúc nào.
             </span>
           </label>

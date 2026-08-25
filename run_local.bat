@@ -43,6 +43,10 @@ echo   Nhan Ctrl + C de dung Server khi khong su dung nua.
 echo ================================================================
 echo.
 
+if exist "%~dp0NHGNSBTT\server.js" (
+    cd /d "%~dp0NHGNSBTT"
+)
+
 "%NODE_EXEC%" server.js
 
 pause

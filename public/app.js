@@ -593,9 +593,9 @@ function renderGeoJsonMap() {
         <path class="geojson-province geojson-other-province" 
               id="geojson-prov-${idx}" 
               d="${d}" 
-              fill="#e2d5c5" 
-              fill-opacity="0.80"
-              stroke="#a3917a"
+              fill="#f1f5f9" 
+              fill-opacity="0.42"
+              stroke="#94a3b8"
               stroke-width="1.2" />
       `;
     }

@@ -9,42 +9,83 @@
 
 /* --- Khung bản đồ: ảnh nền phủ lớp SÁNG thay vì lớp tối ---------------- */
 
+/* --- Khung bản đồ: ảnh nền phong cảnh tự nhiên trong trẻo ---------------- */
+
 .map-wrapper,
 #geojson-map-container {
-  background-color: #eef6ff !important;
-  /* Lop phu TRANG mo thay cho lop phu toi cu trong style.css.
-     0.55 la muc vua du: anh phong canh con nhin ro, ban do van noi len. */
+  background-color: #f8fafc !important;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.55)),
+    linear-gradient(rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.08)),
     url('/landscape_bg.png') !important;
   background-size: cover !important;
   background-position: center center !important;
-  box-shadow: inset 0 0 60px rgba(15, 23, 42, 0.04),
+  box-shadow: inset 0 0 40px rgba(15, 23, 42, 0.05),
               0 12px 36px rgba(15, 23, 42, 0.10) !important;
   border: 2px solid rgba(14, 165, 233, 0.35) !important;
 }
 
 .geojson-svg { filter: none !important; }
 
+/* Tỉnh ngoài khu vực khảo sát: màu xám kem nhạt bán trong suốt, không bị đục mờ */
+.geojson-other-province {
+  fill: #f1f5f9 !important;
+  fill-opacity: 0.42 !important;
+  stroke: #94a3b8 !important;
+  stroke-width: 1.2px !important;
+  stroke-opacity: 0.85 !important;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+/* 6 Tỉnh trọng điểm Bắc Trung Bộ: Rực rỡ, độ tương phản cao, nét viền nổi bật */
+.geojson-target-province {
+  fill-opacity: 0.95 !important;
+  stroke: #ffffff !important;
+  stroke-width: 2.8px !important;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  cursor: pointer;
+  filter: drop-shadow(0 6px 16px rgba(15, 23, 42, 0.25)) drop-shadow(0 0 10px rgba(255, 255, 255, 0.4)) !important;
+  transition: all 0.25s ease !important;
+}
+
+.geojson-target-province:hover {
+  fill-opacity: 1 !important;
+  stroke: #ffffff !important;
+  stroke-width: 3.8px !important;
+  filter: drop-shadow(0 0 20px rgba(0, 163, 255, 0.8)) drop-shadow(0 0 8px rgba(255, 255, 255, 0.9)) !important;
+}
+
+.geojson-target-province.selected {
+  fill-opacity: 1 !important;
+  stroke: #ffffff !important;
+  stroke-width: 4px !important;
+  filter: drop-shadow(0 0 24px rgba(0, 163, 255, 0.95)) drop-shadow(0 0 12px rgba(255, 255, 255, 1)) !important;
+}
+
 /* Nhãn tên tỉnh trên bản đồ: nền trắng chữ đậm */
-.geojson-label-bg { fill: rgba(255, 255, 255, 0.92) !important; }
-.geojson-label-text { fill: var(--text-main) !important; }
+.geojson-label-bg { fill: rgba(255, 255, 255, 0.94) !important; }
+.geojson-label-text { fill: #0f172a !important; font-weight: 800 !important; }
 
 /* --- Khung phụ Hoàng Sa / Trường Sa ------------------------------------ */
 
 .geojson-inset rect {
   fill: rgba(255, 255, 255, 0.88) !important;
-  stroke: var(--color-primary) !important;
+  stroke: #0284c7 !important;
+  stroke-width: 1.8px !important;
+  stroke-dasharray: 5 3 !important;
 }
 
 .geojson-inset text {
-  fill: var(--color-secondary) !important;
-  stroke: #ffffff !important;
+  fill: #0369a1 !important;
+  font-weight: 800 !important;
+  font-size: 11px !important;
 }
 
 .geojson-inset circle {
-  fill: var(--color-warning) !important;
-  stroke: #92400e !important;
+  fill: #f59e0b !important;
+  stroke: #ffffff !important;
+  stroke-width: 1px !important;
 }
 
 /* --- Thẻ phụ đề trên trình phát ---------------------------------------- */
@@ -85,6 +126,13 @@ select.form-input {
 .modal-card strong, .modal-card label,
 .mg-modal-card h1, .mg-modal-card h2, .mg-modal-card h3, .mg-modal-card h4 {
   color: var(--text-main) !important;
+}
+
+/* Modal đóng góp giọng nói luôn giữ theme nền tối đồng bộ */
+#contribution-modal .modal-card {
+  background: #0f172a !important;
+  color: #f8fafc !important;
+  border: 1px solid #1e293b !important;
 }
 
 /* --- Màn hình xử lý âm thanh ------------------------------------------- */

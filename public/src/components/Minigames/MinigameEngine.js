@@ -6,9 +6,14 @@
 class MinigameEngine {
   constructor() {
     // Player & Highscore storage
-    this.playerName = localStorage.getItem('vb_player_name') || '';
+    this.playerName = '';
+    this.userId = null;
     this.highScores = JSON.parse(localStorage.getItem('vb_highscores') || '{"g1":0,"g2":0,"g3":0}');
     this.leaderboard = JSON.parse(localStorage.getItem('vb_leaderboard') || '[]');
+
+    // Leaderboard Tabs State
+    this.selectedLeaderboardGame = 1;
+    this.selectedLeaderboardTime = 'all';
 
     // Active Game State
     this.activeGameId = null;
@@ -44,6 +49,11 @@ class MinigameEngine {
 
     // Bind keyboard listener once
     this.handleKeyDown = this.handleKeyDown.bind(this);
+
+    // Listen to global auth changes to update player status automatically
+    document.addEventListener('gns:auth-changed', () => {
+      this.updateHubPlayerDisplay();
+    });
   }
 
   /* ==========================================================================
@@ -86,31 +96,31 @@ class MinigameEngine {
 
   initHub() {
     this.renderHub();
-    this.promptStartModalOnTabEnter();
-  }
-
-  promptStartModalOnTabEnter() {
-    // Automatically prompt modal on entering minigame tab
-    this.promptStartGame(null);
   }
 
   updateHubPlayerDisplay() {
     const container = document.getElementById('mg-hub-player-info');
     if (!container) return;
 
-    if (this.playerName) {
+    const user = (window.GNS_AUTH && typeof window.GNS_AUTH.isLoggedIn === 'function' && window.GNS_AUTH.isLoggedIn())
+      ? window.GNS_AUTH.user
+      : null;
+
+    if (user) {
+      const displayName = user.fullName || user.username || 'Thành viên';
+      this.playerName = displayName;
+      this.userId = user.id;
       container.innerHTML = `
         <div class="mg-player-badge">
-          <span><i class="fas fa-user-astronaut"></i> Người chơi: <strong>${this.escapeHtml(this.playerName)}</strong></span>
-          <button class="btn-mg-edit-name" onclick="window.voiceBankGames.promptStartGame(null)" title="Đổi tên người chơi">
-            <i class="fas fa-pen"></i> Đổi tên
-          </button>
+          <span><i class="fas fa-user-astronaut"></i> Người chơi: <strong>${this.escapeHtml(displayName)}</strong> <small style="color: #64748b; font-weight: 500;">(@${this.escapeHtml(user.username)})</small></span>
         </div>
       `;
     } else {
+      this.playerName = '';
+      this.userId = null;
       container.innerHTML = `
-        <button class="btn-mg-edit-name highlight" onclick="window.voiceBankGames.promptStartGame(null)">
-          <i class="fas fa-user-plus"></i> Nhập tên người chơi
+        <button class="btn-mg-edit-name highlight" onclick="if(window.GNS_AUTH && window.GNS_AUTH.openAuthModal) window.GNS_AUTH.openAuthModal('login')">
+          <i class="fas fa-right-to-bracket"></i> Đăng nhập để chơi & tích điểm
         </button>
       `;
     }
@@ -128,64 +138,35 @@ class MinigameEngine {
   }
 
   /* ==========================================================================
-     STEP 2: START / NICKNAME MODAL (SAFE NON-BLOCKING)
+     START GAME / AUTH GUARD
      ========================================================================== */
   promptStartGame(gameId) {
-    if (gameId && this.playerName) {
-      // If player name is already set, start game immediately!
-      this.launchGame(gameId);
+    const isLoggedIn = Boolean(window.GNS_AUTH && typeof window.GNS_AUTH.isLoggedIn === 'function' && window.GNS_AUTH.isLoggedIn());
+
+    if (!isLoggedIn) {
+      alert('Vui lòng đăng nhập tài khoản để tham gia thử thách và lưu thành tích vào Bảng xếp hạng!');
+      if (window.GNS_AUTH && typeof window.GNS_AUTH.openAuthModal === 'function') {
+        window.GNS_AUTH.openAuthModal('login');
+      }
       return;
     }
 
-    this.pendingGameId = gameId || null;
-    const modalBackdrop = document.getElementById('mg-start-modal');
-    const inputEl = document.getElementById('mg-nickname-field');
-    const welcomeBox = document.getElementById('mg-welcome-banner');
+    const user = window.GNS_AUTH.user;
+    this.playerName = user ? (user.fullName || user.username) : 'Thành viên';
+    this.userId = user ? user.id : null;
 
-    if (!modalBackdrop) return;
-
-    if (this.playerName) {
-      if (inputEl) inputEl.value = this.playerName;
-      if (welcomeBox) {
-        welcomeBox.innerHTML = `👋 Chào mừng <strong>${this.escapeHtml(this.playerName)}</strong> quay lại!`;
-        welcomeBox.style.display = 'block';
-      }
-    } else {
-      if (inputEl) inputEl.value = '';
-      if (welcomeBox) welcomeBox.style.display = 'none';
+    if (gameId) {
+      this.launchGame(gameId);
     }
-
-    modalBackdrop.classList.add('active');
-    if (inputEl) setTimeout(() => inputEl.focus(), 100);
   }
 
   closeStartModal() {
     const modalBackdrop = document.getElementById('mg-start-modal');
     if (modalBackdrop) modalBackdrop.classList.remove('active');
-    this.pendingGameId = null;
   }
 
   submitStartModal() {
-    const inputEl = document.getElementById('mg-nickname-field');
-    const name = inputEl ? inputEl.value.trim() : '';
-
-    if (!name) {
-      alert('Vui lòng nhập Nickname/Tên người chơi để bắt đầu!');
-      if (inputEl) inputEl.focus();
-      return;
-    }
-
-    this.playerName = name;
-    localStorage.setItem('vb_player_name', name);
-    
-    const pendingId = this.pendingGameId;
-    this.pendingGameId = null;
     this.closeStartModal();
-    this.updateHubPlayerDisplay();
-
-    if (pendingId) {
-      this.launchGame(pendingId);
-    }
   }
 
   /* ==========================================================================
@@ -523,7 +504,7 @@ class MinigameEngine {
   }
 
   /* ==========================================================================
-     GAME 3: Ô CHỮ PHƯƠNG NGỮ (ĐOÁN TỪ)
+     GAME 3: Ô CHỮ PHƯƠNG NGỮ (NATIVE INPUT + AUTO-ADVANCE & NORMALIZATION)
      ========================================================================== */
   initGame3() {
     MinigameEngine.safeSetText('mg-arena-title', 'Game 3: Ô chữ phương ngữ');
@@ -535,7 +516,7 @@ class MinigameEngine {
       return;
     }
 
-    // Pick a clean word (without complex characters if possible)
+    // Pick a clean word
     const validPool = lexicon.filter(item => item.word && item.word.length >= 2 && item.word.length <= 12);
     const item = validPool[Math.floor(Math.random() * validPool.length)];
     
@@ -543,7 +524,6 @@ class MinigameEngine {
     const targetWord = item.word.toUpperCase();
     this.g3TargetLetters = targetWord.split('');
     this.g3UserLetters = new Array(this.g3TargetLetters.length).fill('');
-    this.g3ActiveSlotIdx = 0;
     this.g3Answered = false;
 
     // Fill non-letter slots like spaces
@@ -552,24 +532,21 @@ class MinigameEngine {
         this.g3UserLetters[i] = ' ';
       }
     }
-    // Find first non-space active index
-    while (this.g3ActiveSlotIdx < this.g3TargetLetters.length && this.g3TargetLetters[this.g3ActiveSlotIdx] === ' ') {
-      this.g3ActiveSlotIdx++;
-    }
 
     this.renderG3UI();
+
+    // Auto-focus on first non-space slot
+    setTimeout(() => {
+      let firstSlot = 0;
+      while (firstSlot < this.g3TargetLetters.length && this.g3TargetLetters[firstSlot] === ' ') firstSlot++;
+      const firstEl = document.getElementById(`mg-g3-input-${firstSlot}`);
+      if (firstEl) firstEl.focus();
+    }, 150);
   }
 
   renderG3UI() {
     const arenaBody = document.getElementById('mg-arena-body');
     if (!arenaBody || !this.g3Item) return;
-
-    const keypadRows = [
-      ['A', 'Ă', 'Â', 'B', 'C', 'D', 'Đ', 'E', 'Ê', 'G'],
-      ['H', 'I', 'K', 'L', 'M', 'N', 'O', 'Ô', 'Ơ', 'P'],
-      ['Q', 'R', 'S', 'T', 'U', 'Ư', 'V', 'X', 'Y'],
-      ['DELETE', 'REVEAL', 'CHECK']
-    ];
 
     arenaBody.innerHTML = `
       <div class="mg-g3-container">
@@ -580,42 +557,42 @@ class MinigameEngine {
           <div style="font-size: 13px; color: #b45309; margin-top: 6px;">Khu vực: ${this.escapeHtml(this.g3Item.region || 'Bắc Trung Bộ')}</div>
         </div>
 
-        <!-- Empty Square Slots -->
+        <!-- Native Letter Inputs -->
         <div class="mg-word-slots" id="mg-word-slots">
           ${this.g3TargetLetters.map((char, idx) => {
             if (char === ' ') {
               return `<div class="mg-letter-box space"></div>`;
             }
-            const isFilled = this.g3UserLetters[idx] !== '';
-            const isActive = idx === this.g3ActiveSlotIdx && !this.g3Answered;
+            const val = this.g3UserLetters[idx] || '';
             const isRevealed = this.g3Answered;
             return `
-              <div class="mg-letter-box ${isFilled ? 'filled' : ''} ${isActive ? 'active' : ''} ${isRevealed ? 'revealed' : ''}" 
-                   onclick="window.voiceBankGames.setG3ActiveSlot(${idx})">
-                ${this.g3UserLetters[idx] || ''}
-              </div>
+              <input type="text" 
+                     class="mg-letter-input ${val ? 'filled' : ''} ${isRevealed ? 'revealed' : ''}" 
+                     id="mg-g3-input-${idx}"
+                     data-index="${idx}"
+                     maxlength="1"
+                     value="${this.escapeHtml(val)}"
+                     ${isRevealed ? 'disabled' : ''}
+                     oninput="window.voiceBankGames.handleG3Input(event, ${idx})"
+                     onkeydown="window.voiceBankGames.handleG3KeyDown(event, ${idx})"
+                     onclick="this.select()"
+                     autocomplete="off"
+                     autocorrect="off"
+                     autocapitalize="characters"
+                     spellcheck="false"
+              />
             `;
           }).join('')}
         </div>
 
-        <!-- Virtual Keypad -->
-        <div class="mg-virtual-keypad">
-          ${keypadRows.map((row, rIdx) => `
-            <div class="mg-key-row">
-              ${row.map(key => {
-                if (key === 'DELETE') {
-                  return `<button class="btn-mg-key wide" ${this.g3Answered ? 'disabled' : ''} onclick="window.voiceBankGames.handleG3Key('BACKSPACE')"><i class="fas fa-backspace"></i> Xóa</button>`;
-                }
-                if (key === 'REVEAL') {
-                  return `<button class="btn-mg-key wide btn-reveal-cw" ${this.g3Answered ? 'disabled' : ''} onclick="window.voiceBankGames.revealG3Answer()"><i class="fas fa-eye"></i> Xem đáp án</button>`;
-                }
-                if (key === 'CHECK') {
-                  return `<button class="btn-mg-key wide btn-submit-cw" ${this.g3Answered ? 'disabled' : ''} onclick="window.voiceBankGames.submitG3Answer()"><i class="fas fa-check"></i> Kiểm tra</button>`;
-                }
-                return `<button class="btn-mg-key" ${this.g3Answered ? 'disabled' : ''} onclick="window.voiceBankGames.handleG3Key('${key}')">${key}</button>`;
-              }).join('')}
-            </div>
-          `).join('')}
+        <!-- Game 3 Actions -->
+        <div class="mg-g3-actions">
+          <button class="btn-mg-action btn-reveal-cw" ${this.g3Answered ? 'disabled' : ''} onclick="window.voiceBankGames.revealG3Answer()">
+            <i class="fas fa-eye"></i> Xem đáp án
+          </button>
+          <button class="btn-mg-action btn-submit-cw" ${this.g3Answered ? 'disabled' : ''} onclick="window.voiceBankGames.submitG3Answer()">
+            <i class="fas fa-check"></i> Kiểm tra đáp án
+          </button>
         </div>
 
         <!-- Explanation / Revealed Banner -->
@@ -638,81 +615,120 @@ class MinigameEngine {
     `;
   }
 
-  setG3ActiveSlot(idx) {
+  handleG3Input(e, idx) {
     if (this.g3Answered) return;
-    if (this.g3TargetLetters[idx] !== ' ') {
-      this.g3ActiveSlotIdx = idx;
-      this.renderG3UI();
+    const inputEl = e.target;
+    const rawVal = inputEl.value || '';
+
+    if (rawVal.length > 0) {
+      // Take character typed
+      const char = rawVal.slice(-1);
+      this.g3UserLetters[idx] = char;
+      inputEl.value = char;
+      inputEl.classList.add('filled');
+
+      // Auto advance to next non-space slot
+      let nextIdx = idx + 1;
+      while (nextIdx < this.g3TargetLetters.length && this.g3TargetLetters[nextIdx] === ' ') {
+        nextIdx++;
+      }
+      if (nextIdx < this.g3TargetLetters.length) {
+        const nextEl = document.getElementById(`mg-g3-input-${nextIdx}`);
+        if (nextEl) {
+          nextEl.focus();
+          nextEl.select();
+        }
+      }
+    } else {
+      this.g3UserLetters[idx] = '';
+      inputEl.classList.remove('filled');
     }
   }
 
-  handleG3Key(key) {
-    if (!this.g3Item || this.g3Answered) return;
+  handleG3KeyDown(e, idx) {
+    if (this.g3Answered) return;
 
-    if (key === 'BACKSPACE') {
-      if (this.g3UserLetters[this.g3ActiveSlotIdx] !== '') {
-        this.g3UserLetters[this.g3ActiveSlotIdx] = '';
-      } else {
-        // Move back to previous non-space slot
-        let prev = this.g3ActiveSlotIdx - 1;
-        while (prev >= 0 && this.g3TargetLetters[prev] === ' ') prev--;
-        if (prev >= 0) {
-          this.g3ActiveSlotIdx = prev;
-          this.g3UserLetters[this.g3ActiveSlotIdx] = '';
+    if (e.key === 'Backspace') {
+      const inputEl = e.target;
+      if (!inputEl.value || inputEl.value === '') {
+        e.preventDefault();
+        // Move focus backward to previous non-space slot and clear it
+        let prevIdx = idx - 1;
+        while (prevIdx >= 0 && this.g3TargetLetters[prevIdx] === ' ') {
+          prevIdx--;
+        }
+        if (prevIdx >= 0) {
+          const prevEl = document.getElementById(`mg-g3-input-${prevIdx}`);
+          if (prevEl) {
+            prevEl.focus();
+            prevEl.value = '';
+            this.g3UserLetters[prevIdx] = '';
+            prevEl.classList.remove('filled');
+          }
         }
       }
-      this.renderG3UI();
-      return;
-    }
-
-    if (key === 'ENTER') {
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
       this.submitG3Answer();
-      return;
-    }
-
-    // Single letter input
-    if (key.length === 1) {
-      this.g3UserLetters[this.g3ActiveSlotIdx] = key.toUpperCase();
-      
-      // Advance to next non-space slot
-      let next = this.g3ActiveSlotIdx + 1;
-      while (next < this.g3TargetLetters.length && this.g3TargetLetters[next] === ' ') next++;
-      if (next < this.g3TargetLetters.length) {
-        this.g3ActiveSlotIdx = next;
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      let prevIdx = idx - 1;
+      while (prevIdx >= 0 && this.g3TargetLetters[prevIdx] === ' ') {
+        prevIdx--;
       }
-      this.renderG3UI();
+      if (prevIdx >= 0) {
+        const prevEl = document.getElementById(`mg-g3-input-${prevIdx}`);
+        if (prevEl) prevEl.focus();
+      }
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      let nextIdx = idx + 1;
+      while (nextIdx < this.g3TargetLetters.length && this.g3TargetLetters[nextIdx] === ' ') {
+        nextIdx++;
+      }
+      if (nextIdx < this.g3TargetLetters.length) {
+        const nextEl = document.getElementById(`mg-g3-input-${nextIdx}`);
+        if (nextEl) nextEl.focus();
+      }
     }
   }
 
   handleKeyDown(e) {
     if (this.activeGameId !== 3 || this.g3Answered) return;
+  }
 
-    // Check if input element has focus
-    if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
-      return;
-    }
-
-    const key = e.key.toUpperCase();
-    if (key === 'BACKSPACE') {
-      e.preventDefault();
-      this.handleG3Key('BACKSPACE');
-    } else if (key === 'ENTER') {
-      e.preventDefault();
-      this.submitG3Answer();
-    } else if (/^[A-ZĂÂĐÊÔƠƯÀẢÃÁẠÈẺẼẾỆÌỈĨÍỊÒỎÕỐỘỜỞỠỚỢÙỦŨỨỰỲỶỸÝ]$/i.test(key)) {
-      this.handleG3Key(key);
-    }
+  static normalizeText(str) {
+    return str ? str.trim().toLowerCase().normalize('NFC') : '';
   }
 
   submitG3Answer() {
     if (this.g3Answered) return;
-    const userString = this.g3UserLetters.join('');
-    const targetString = this.g3TargetLetters.join('');
 
-    if (userString.length < targetString.length || userString.includes('')) {
-      alert('Vui lòng điền đủ tất cả các ô chữ cái!');
+    // Check if any non-space slot is empty
+    let isComplete = true;
+    for (let i = 0; i < this.g3TargetLetters.length; i++) {
+      if (this.g3TargetLetters[i] !== ' ' && (!this.g3UserLetters[i] || this.g3UserLetters[i].trim() === '')) {
+        isComplete = false;
+        break;
+      }
+    }
+
+    if (!isComplete) {
+      alert('Vui lòng nhập đủ tất cả các ô chữ cái!');
+      // Focus first empty slot
+      for (let i = 0; i < this.g3TargetLetters.length; i++) {
+        if (this.g3TargetLetters[i] !== ' ' && (!this.g3UserLetters[i] || this.g3UserLetters[i].trim() === '')) {
+          const emptyEl = document.getElementById(`mg-g3-input-${i}`);
+          if (emptyEl) emptyEl.focus();
+          break;
+        }
+      }
       return;
     }
+
+    // Build normalized user & target strings for Unicode Vietnamese comparison
+    const userString = MinigameEngine.normalizeText(this.g3UserLetters.join(''));
+    const targetString = MinigameEngine.normalizeText(this.g3TargetLetters.join(''));
 
     if (userString === targetString) {
       // Solved!
@@ -721,8 +737,11 @@ class MinigameEngine {
       this.score += 250;
       this.updateArenaStats();
 
-      const slots = document.querySelectorAll('.mg-letter-box:not(.space)');
-      slots.forEach(slot => slot.classList.add('solved'));
+      const inputs = document.querySelectorAll('.mg-letter-input');
+      inputs.forEach(input => {
+        input.classList.add('solved');
+        input.disabled = true;
+      });
 
       setTimeout(() => this.finishGame(), 800);
     } else {
@@ -731,11 +750,11 @@ class MinigameEngine {
       this.score = Math.max(0, this.score - 30);
       this.updateArenaStats();
 
-      const slots = document.querySelectorAll('.mg-letter-box:not(.space)');
-      slots.forEach(slot => slot.classList.add('wrong'));
+      const inputs = document.querySelectorAll('.mg-letter-input');
+      inputs.forEach(input => input.classList.add('wrong'));
 
       setTimeout(() => {
-        slots.forEach(slot => slot.classList.remove('wrong'));
+        inputs.forEach(input => input.classList.remove('wrong'));
       }, 600);
     }
   }
@@ -758,6 +777,9 @@ class MinigameEngine {
   /* ==========================================================================
      STEP 4: RESULTS SCREEN & CONFETTI & LEADERBOARD
      ========================================================================== */
+  /* ==========================================================================
+     STEP 4: RESULTS SCREEN & CONFETTI & LEADERBOARD
+     ========================================================================== */
   finishGame() {
     this.stopAllTimers();
     const timeSec = Math.max(1, Math.floor((Date.now() - this.roundStartTime) / 1000));
@@ -769,12 +791,21 @@ class MinigameEngine {
       localStorage.setItem('vb_highscores', JSON.stringify(this.highScores));
     }
 
+    const user = (window.GNS_AUTH && typeof window.GNS_AUTH.isLoggedIn === 'function' && window.GNS_AUTH.isLoggedIn())
+      ? window.GNS_AUTH.user
+      : null;
+
+    const playerName = user ? (user.fullName || user.username) : (this.playerName || 'Thành viên');
+    const username = user ? user.username : '';
+
     // Add to Leaderboard
     const entry = {
       id: Date.now(),
-      name: this.playerName || 'Người chơi bí ẩn',
+      userId: user ? user.id : null,
+      username: username,
+      name: playerName,
       score: this.score,
-      gameId: this.activeGameId,
+      gameId: Number(this.activeGameId),
       gameTitle: this.activeGameId === 1 ? 'Giải nghĩa phương ngữ' : (this.activeGameId === 2 ? 'Ghép cặp từ vựng' : 'Ô chữ phương ngữ'),
       timeSec: timeSec,
       timestamp: Date.now(),
@@ -858,14 +889,26 @@ class MinigameEngine {
   }
 
   /* ==========================================================================
-     LEADERBOARD MODAL (TOP 10 + TABS)
+     LEADERBOARD MODAL (TOP 10 PER GAME + TABS)
      ========================================================================== */
-  openLeaderboard(filterTab = 'all') {
+  openLeaderboard(gameId, timeRange) {
+    if (gameId) {
+      this.selectedLeaderboardGame = Number(gameId);
+    } else if (this.activeGameId) {
+      this.selectedLeaderboardGame = Number(this.activeGameId);
+    } else if (!this.selectedLeaderboardGame) {
+      this.selectedLeaderboardGame = 1;
+    }
+
+    if (timeRange) {
+      this.selectedLeaderboardTime = timeRange;
+    }
+
     const modalBackdrop = document.getElementById('mg-leaderboard-modal');
     if (!modalBackdrop) return;
 
     modalBackdrop.classList.add('active');
-    this.renderLeaderboard(filterTab);
+    this.renderLeaderboard();
   }
 
   closeLeaderboard() {
@@ -873,23 +916,45 @@ class MinigameEngine {
     if (modalBackdrop) modalBackdrop.classList.remove('active');
   }
 
-  renderLeaderboard(filterTab) {
+  switchLeaderboardGame(gameId) {
+    this.selectedLeaderboardGame = Number(gameId);
+    this.renderLeaderboard();
+  }
+
+  switchLeaderboardTime(timeRange) {
+    this.selectedLeaderboardTime = timeRange;
+    this.renderLeaderboard();
+  }
+
+  renderLeaderboard() {
     const listEl = document.getElementById('mg-lb-list');
     if (!listEl) return;
 
-    // Update tab active state
-    document.querySelectorAll('.btn-mg-tab').forEach(btn => {
-      if (btn.getAttribute('data-tab') === filterTab) {
+    // Update Level 1 Game tab active state
+    document.querySelectorAll('#mg-game-tabs .btn-mg-game-tab').forEach(btn => {
+      const btnGame = Number(btn.getAttribute('data-game'));
+      if (btnGame === this.selectedLeaderboardGame) {
         btn.classList.add('active');
       } else {
         btn.classList.remove('active');
       }
     });
 
-    let data = [...this.leaderboard];
+    // Update Level 2 Time tab active state
+    document.querySelectorAll('#mg-time-tabs .btn-mg-tab').forEach(btn => {
+      const btnTime = btn.getAttribute('data-time');
+      if (btnTime === this.selectedLeaderboardTime) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+
+    // Filter by selected minigame
+    let data = this.leaderboard.filter(item => Number(item.gameId) === this.selectedLeaderboardGame);
 
     // Filter "Tuần này" (within past 7 days)
-    if (filterTab === 'week') {
+    if (this.selectedLeaderboardTime === 'week') {
       const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
       data = data.filter(item => item.timestamp >= sevenDaysAgo);
     }
@@ -906,7 +971,7 @@ class MinigameEngine {
       listEl.innerHTML = `
         <div style="text-align: center; padding: 30px; color: #64748b;">
           <i class="fas fa-trophy" style="font-size: 36px; color: #cbd5e1; margin-bottom: 10px;"></i>
-          <p>Chưa có dữ liệu bảng xếp hạng cho khoảng thời gian này.</p>
+          <p>Chưa có dữ liệu bảng xếp hạng cho trò chơi này trong khoảng thời gian đã chọn.</p>
         </div>
       `;
       return;
@@ -920,12 +985,14 @@ class MinigameEngine {
       else if (idx === 1) { rankBadge = '🥈'; topClass = 'top-2'; }
       else if (idx === 2) { rankBadge = '🥉'; topClass = 'top-3'; }
 
+      const displayName = item.name || item.username || 'Thành viên';
+
       return `
         <div class="mg-lb-row ${topClass}">
           <div class="mg-lb-rank">${rankBadge}</div>
           <div class="mg-lb-info">
-            <div class="mg-lb-name">${this.escapeHtml(item.name)}</div>
-            <div class="mg-lb-sub">${this.escapeHtml(item.gameTitle)} • ⏱️ ${item.timeSec}s • ${item.dateStr}</div>
+            <div class="mg-lb-name">${this.escapeHtml(displayName)}</div>
+            <div class="mg-lb-sub">⏱️ ${item.timeSec}s • ${item.dateStr}</div>
           </div>
           <div class="mg-lb-score">${item.score} đ</div>
         </div>

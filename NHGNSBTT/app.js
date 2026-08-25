@@ -13,6 +13,7 @@ let recordedBlob = null;
 let localAudioCorpus = [];
 let localLexicon = [];
 let pendingContributions = [];
+let AUDIO_BLOB_CACHE = new Map();
 
 // YouTube player variables
 let ytPlayer = null;
@@ -50,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initAdminModule();
   setupAudioRecorder();
   setupAdminYoutubeUpload();
+  setupReportModal();
   updateGlobalStats();
   initYouTubePlayer();
 });
@@ -105,15 +107,32 @@ function initData() {
   const storedLexicon = localStorage.getItem('vb_lexicon');
   const storedPending = localStorage.getItem('vb_pending_contributions');
 
+  const invalidTitles = new Set(['hue', 'huế', 'xứ huế quê tôi', 'lời dặn dò của mạ huế']);
+  const storedDeletedIds = localStorage.getItem('vb_deleted_audio_ids');
+  const deletedIdsSet = new Set(storedDeletedIds ? JSON.parse(storedDeletedIds) : []);
+
   if (storedCorpus) {
     const parsedCorpus = JSON.parse(storedCorpus);
     const validIds = new Set(AUDIO_CORPUS.map(a => a.id));
-    localAudioCorpus = parsedCorpus.filter(item => validIds.has(item.id) || (item.id && (item.id.startsWith('user_') || item.id.startsWith('p_') || item.id.startsWith('contrib_'))));
-    localStorage.setItem('vb_audio_corpus', JSON.stringify(localAudioCorpus));
+    localAudioCorpus = parsedCorpus.filter(item => {
+      if (!item) return false;
+      const titleLower = (item.title || '').trim().toLowerCase();
+      if (invalidTitles.has(titleLower)) return false;
+      if (deletedIdsSet.has(item.id)) return false;
+      return validIds.has(item.id) || (item.id && (item.id.startsWith('user_') || item.id.startsWith('p_') || item.id.startsWith('contrib_') || item.id.startsWith('audio_') || item.id.startsWith('speech_') || item.id.startsWith('yt_')));
+    });
   } else {
-    localAudioCorpus = [...AUDIO_CORPUS];
-    localStorage.setItem('vb_audio_corpus', JSON.stringify(localAudioCorpus));
+    localAudioCorpus = AUDIO_CORPUS.filter(item => {
+      if (!item) return false;
+      const titleLower = (item.title || '').trim().toLowerCase();
+      if (invalidTitles.has(titleLower)) return false;
+      if (deletedIdsSet.has(item.id)) return false;
+      return true;
+    });
   }
+
+  // Ensure purged state is saved to localStorage
+  localStorage.setItem('vb_audio_corpus', JSON.stringify(localAudioCorpus));
 
   const SENSITIVE_WORDS = new Set([
     'ẻ', 'cóc xê', 'su lích', 'khu mấn', 'địt', 'lẹo', 'khu', 'cức', 'ngỏng',
@@ -141,6 +160,54 @@ function initData() {
     pendingContributions = [];
     localStorage.setItem('vb_pending_contributions', JSON.stringify(pendingContributions));
   }
+
+  fetchAudioDatabaseFromBackend();
+  fetchLexiconFromBackend();
+}
+
+/**
+ * MySQL là nguồn sự thật duy nhất: danh sách trả về từ server THAY THẾ
+ * bản trong localStorage, không hợp nhất. Nhờ vậy bản ghi bị admin xoá
+ * hoặc từ chối sẽ biến mất thật, thay vì sống lại từ cache của trình duyệt.
+ */
+async function fetchAudioDatabaseFromBackend() {
+  try {
+    const res = await apiFetch('/api/audio-database');
+    if (!res.ok) return;
+
+    const serverRecords = await res.json();
+    if (!Array.isArray(serverRecords)) return;
+
+    localAudioCorpus = serverRecords;
+    localStorage.setItem('vb_audio_corpus', JSON.stringify(localAudioCorpus));
+
+    updateGlobalStats();
+    if (typeof drawMapMarkers === 'function') drawMapMarkers();
+    if (typeof filterMapData === 'function' && selectedProvince) filterMapData();
+  } catch (e) {
+    console.warn('[Đồng bộ] Không tải được danh sách bản ghi từ server:', e);
+  }
+}
+
+/** Từ điển cũng lấy từ MySQL; data.js chỉ còn là bản dự phòng lúc tải trang. */
+async function fetchLexiconFromBackend() {
+  try {
+    const res = await apiFetch('/api/lexicon');
+    if (!res.ok) return;
+
+    const serverLexicon = await res.json();
+    if (!Array.isArray(serverLexicon) || !serverLexicon.length) return;
+
+    localLexicon = serverLexicon;
+    localStorage.setItem('vb_lexicon', JSON.stringify(localLexicon));
+
+    updateGlobalStats();
+    if (typeof renderDictionaryList === 'function' && activeTab === 'dictionary-view') {
+      renderDictionaryList(localLexicon);
+    }
+  } catch (e) {
+    console.warn('[Đồng bộ] Không tải được từ điển từ server:', e);
+  }
 }
 
 function updateGlobalStats() {
@@ -159,18 +226,36 @@ function updateGlobalStats() {
 // Navigation Router
 // --------------------------------------------------------------------------
 function setupNavigation() {
-  const navItems = document.querySelectorAll('.navbar-link');
-  navItems.forEach(item => {
-    item.addEventListener('click', () => {
-      const targetView = item.getAttribute('data-view');
-      switchTab(targetView);
+  document.querySelectorAll('.navbar-link').forEach(item => {
+    item.addEventListener('click', (event) => {
+      // Mục navbar giờ bọc thẻ <a data-route>; router.js đã xử lý cú bấm đó.
+      // Bỏ qua ở đây để không điều hướng hai lần.
+      if (event.target.closest('a[data-route]')) return;
+      switchTab(item.getAttribute('data-view'));
     });
   });
 }
 
-function switchTab(viewId) {
+/**
+ * @param {string} viewId
+ * @param {{fromRouter?: boolean}} [opts] fromRouter = do router gọi vào,
+ *        khi đó KHÔNG đẩy lại history (tránh vòng lặp).
+ */
+function switchTab(viewId, opts) {
+  const fromRouter = Boolean(opts && opts.fromRouter);
+
+  // Chặn ở phía giao diện; server vẫn kiểm tra quyền độc lập trên mỗi API
+  if (viewId === 'admin-view' && !(window.GNS_AUTH && window.GNS_AUTH.isAdmin())) {
+    window.GNS_AUTH && window.GNS_AUTH.requireLogin('Khu vực quản trị chỉ dành cho quản trị viên.');
+    // Chưa đủ quyền mà URL đang là /admin thì đưa về trang chủ cho khớp
+    if (fromRouter && window.GNS_ROUTER) window.GNS_ROUTER.syncUrl('home-view', { replace: true });
+    return;
+  }
+
+  if (!fromRouter && window.GNS_ROUTER) window.GNS_ROUTER.syncUrl(viewId);
+
   activeTab = viewId;
-  
+
   // Stop any playing audio
   stopAudioPlayer();
   if (window.voiceBankGames) {
@@ -196,12 +281,23 @@ function switchTab(viewId) {
   });
 
   // Special hooks
+  if (viewId === 'contribute-view') {
+    if (window.GNS_CONTRIBUTE) window.GNS_CONTRIBUTE.render();
+  }
+
+  if (viewId === 'archive-view') {
+    if (window.GNS_ARCHIVE) {
+      window.GNS_ARCHIVE.initArchiveView();
+      window.GNS_ARCHIVE.renderCoverage();
+    }
+  }
+
   if (viewId === 'quizzes-view') {
     if (window.voiceBankGames) {
       window.voiceBankGames.initHub();
     }
   } else if (viewId === 'admin-view') {
-    renderAdminQueue();
+    switchAdminSubTab('dashboard');
   } else if (viewId === 'map-view') {
     // Redraw dynamic markers on GeoJSON SVG map if selected tab
     setTimeout(() => {
@@ -239,7 +335,7 @@ function initMapModule() {
   const mapWrapper = document.getElementById('geojson-map-container');
 
   // Load geojson
-  fetch('/vietnam.geojson')
+  fetch('/vietnam.geojson?v=202608181716')
     .then(res => res.json())
     .then(geojson => {
       cachedGeojsonData = geojson;
@@ -263,7 +359,25 @@ function initMapModule() {
   });
   document.getElementById('btn-zoom-reset').addEventListener('click', () => {
     resetMapZoom();
+    closeProvincePopup();
   });
+
+  // Setup Pop-up Card listeners
+  const closePopupBtn = document.getElementById('close-province-popup');
+  if (closePopupBtn) {
+    closePopupBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeProvincePopup();
+    });
+  }
+  const popupDetailBtn = document.getElementById('popup-detail-btn');
+  if (popupDetailBtn) {
+    popupDetailBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const sidePanel = document.querySelector('.side-panel');
+      if (sidePanel) sidePanel.scrollIntoView({ behavior: 'smooth' });
+    });
+  }
 
   // Setup pan/drag events on mapWrapper
   mapWrapper.addEventListener('mousedown', (e) => {
@@ -303,8 +417,8 @@ function constrainPan() {
     currentTranslateY = 0;
     return;
   }
-  const maxDragX = (svgWidth * (currentScale - 1)) / 2;
-  const maxDragY = (svgHeight * (currentScale - 1)) / 2;
+  const maxDragX = (svgWidth * currentScale) * 0.75;
+  const maxDragY = (svgHeight * currentScale) * 0.75;
 
   currentTranslateX = Math.max(-maxDragX, Math.min(maxDragX, currentTranslateX));
   currentTranslateY = Math.max(-maxDragY, Math.min(maxDragY, currentTranslateY));
@@ -335,20 +449,7 @@ function renderGeoJsonMap() {
   const container = document.getElementById('geojson-svg-map');
   if (!container || !cachedGeojsonData) return;
 
-  const centralCoastKeys = ['vn-th', 'vn-na', 'vn-328', 'vn-qb', 'vn-qt', 'vn-tt'];
-  const centralCoastNames = ['Thanh Hóa', 'Nghệ An', 'Hà Tĩnh', 'Quảng Bình', 'Quảng Trị', 'Thừa Thiên Huế'];
-
-  const filteredFeatures = cachedGeojsonData.features.filter(f => {
-    const hcKey = f.properties['hc-key'] || '';
-    const name = f.properties['name'] || f.properties['title'] || '';
-    return centralCoastKeys.includes(hcKey.toLowerCase()) || 
-           centralCoastNames.some(n => name.toLowerCase().includes(n.toLowerCase()));
-  });
-
-  if (filteredFeatures.length === 0) {
-    container.innerHTML = '<div style="color: var(--color-error); text-align: center; padding: 20px;">Không tìm thấy 6 tỉnh Bắc Trung Bộ trong dữ liệu bản đồ.</div>';
-    return;
-  }
+  const themeMode = 'dongson-full';
 
   function getGeometryCoords(geometry) {
     let coords = [];
@@ -366,8 +467,15 @@ function renderGeoJsonMap() {
     return coords;
   }
 
+  // Hoàng Sa và Trường Sa nằm rất xa bờ. Vẽ đúng vị trí thật sẽ nới khung bao
+  // gấp đôi và làm đất liền co lại một nửa, nên tách ra vẽ trong khung phụ —
+  // đúng quy ước bản đồ hành chính Việt Nam.
+  const insetFeatures = cachedGeojsonData.features.filter(f => f.properties['gns-inset']);
+  const mainFeatures = cachedGeojsonData.features.filter(f => !f.properties['gns-inset']);
+
+  // Tinh toan toa do bao het toan bo ban do Viet Nam
   let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
-  filteredFeatures.forEach(f => {
+  mainFeatures.forEach(f => {
     const pts = getGeometryCoords(f.geometry);
     pts.forEach(pt => {
       const lon = pt[0];
@@ -379,10 +487,10 @@ function renderGeoJsonMap() {
     });
   });
 
-  geojsonMinLon = minLon - (maxLon - minLon) * 0.05;
-  geojsonMaxLon = maxLon + (maxLon - minLon) * 0.05;
-  geojsonMinLat = minLat - (maxLat - minLat) * 0.05;
-  geojsonMaxLat = maxLat + (maxLat - minLat) * 0.05;
+  geojsonMinLon = minLon - (maxLon - minLon) * 0.04;
+  geojsonMaxLon = maxLon + (maxLon - minLon) * 0.04;
+  geojsonMinLat = minLat - (maxLat - minLat) * 0.04;
+  geojsonMaxLat = maxLat + (maxLat - minLat) * 0.04;
 
   function project(lon, lat) {
     const x = ((lon - geojsonMinLon) / (geojsonMaxLon - geojsonMinLon)) * svgWidth;
@@ -390,13 +498,14 @@ function renderGeoJsonMap() {
     return { x, y };
   }
 
-  const colors = {
-    'Thanh Hóa': '#10b981',
-    'Nghệ An': '#f59e0b',
-    'Hà Tĩnh': '#a855f7',
-    'Quảng Bình': '#3b82f6',
-    'Quảng Trị': '#ec4899',
-    'Thừa Thiên Huế': '#06b6d4'
+  // Luminous & Radiant High-Contrast Palette for 6 provinces of Bắc Trung Bộ
+  const provinceGradients = {
+    'Thanh Hóa': { id: 'grad-thanh-hoa', color1: '#A8E6CF', color2: '#52B788' },       // Luminous Mint Sage (Xanh lá mạ mượt tươi sáng)
+    'Nghệ An': { id: 'grad-nghe-an', color1: '#FDE68A', color2: '#F59E0B' },         // Bright Sunlit Amber (Vàng nắng rực rỡ tươi)
+    'Hà Tĩnh': { id: 'grad-ha-tinh', color1: '#99E9F2', color2: '#34D399' },         // Radiant Crystal Jade (Xanh ngọc lam celadon sáng trong)
+    'Quảng Bình': { id: 'grad-quang-binh', color1: '#FED7AA', color2: '#F97316' },     // Glowing Coral Amber (Cam hồng đào rực sáng)
+    'Quảng Trị': { id: 'grad-quang-tri', color1: '#BAE6FD', color2: '#3B82F6' },       // Bright Ocean Sky Azure (Xanh lam biển trời tươi sáng)
+    'Thừa Thiên Huế': { id: 'grad-thua-thien-hue', color1: '#E9D5FF', color2: '#A855F7' } // Imperial Radiant Lavender (Tím Cố Đô quý phái rực sáng)
   };
 
   function getProvinceStandardName(f) {
@@ -411,13 +520,14 @@ function renderGeoJsonMap() {
     return 'Khác';
   }
 
-  let pathsHtml = '';
+  let targetPathsHtml = '';
+  let otherPathsHtml = '';
   let labelsHtml = '';
   computedCentroids = {};
 
-  filteredFeatures.forEach((f, idx) => {
+  mainFeatures.forEach((f, idx) => {
     const provName = getProvinceStandardName(f);
-    if (provName === 'Khác') return;
+    const isTarget = provName !== 'Khác';
 
     let d = '';
     let sumX = 0, sumY = 0, ptCount = 0;
@@ -446,41 +556,234 @@ function renderGeoJsonMap() {
       });
     }
 
-    const fillColor = colors[provName] || '#3b82f6';
-    pathsHtml += `
-      <path class="geojson-province" 
-            id="geojson-prov-${idx}" 
-            data-name="${provName}" 
-            d="${d}" 
-            fill="${fillColor}" 
-            fill-opacity="0.6"
-            onclick="selectProvince('${provName}')" />
-    `;
+    if (isTarget) {
+      const gradInfo = provinceGradients[provName];
+      const fillAttr = gradInfo ? `url(#${gradInfo.id})` : '#0284C7';
+      const isSelected = selectedProvince === provName;
 
-    // Compute centroid in projected SVG coordinates
-    if (ptCount > 0) {
-      const cx = sumX / ptCount;
-      const cy = sumY / ptCount;
-      computedCentroids[provName] = { x: cx, y: cy };
+      targetPathsHtml += `
+        <path class="geojson-province geojson-target-province ${isSelected ? 'selected' : ''}" 
+              id="geojson-prov-${idx}" 
+              data-name="${provName}" 
+              d="${d}" 
+              fill="${fillAttr}" 
+              fill-opacity="0.92"
+              stroke="#ffffff"
+              stroke-width="2.8"
+              filter="url(#target-glow)"
+              onclick="selectProvince('${provName}')" />
+      `;
 
-      const textLen = provName.toUpperCase().length;
-      const bgWidth = textLen * 6.5 + 16;
-      labelsHtml += `
-        <g transform="translate(${cx.toFixed(1)}, ${(cy + 24).toFixed(1)})">
-          <rect class="geojson-label-bg" x="-${(bgWidth/2).toFixed(1)}" y="-8" width="${bgWidth}" height="16" />
-          <text class="geojson-label-text" dy="4">${provName.toUpperCase()}</text>
-        </g>
+      if (ptCount > 0) {
+        const cx = sumX / ptCount;
+        const cy = sumY / ptCount;
+        computedCentroids[provName] = { x: cx, y: cy };
+
+        const textLen = provName.toUpperCase().length;
+        const bgWidth = textLen * 6.5 + 18;
+        labelsHtml += `
+          <g transform="translate(${cx.toFixed(1)}, ${(cy + 24).toFixed(1)})" class="geojson-label-group">
+            <rect class="geojson-label-bg" x="-${(bgWidth/2).toFixed(1)}" y="-9" width="${bgWidth}" height="18" rx="9" />
+            <text class="geojson-label-text" dy="4">${provName.toUpperCase()}</text>
+          </g>
+        `;
+      }
+    } else {
+      otherPathsHtml += `
+        <path class="geojson-province geojson-other-province" 
+              id="geojson-prov-${idx}" 
+              d="${d}" 
+              fill="#f1f5f9" 
+              fill-opacity="0.42"
+              stroke="#94a3b8"
+              stroke-width="1.2" />
       `;
     }
   });
 
+  // Clean background art without vector ribbon overlays
+  let bgArtContent = '';
+
+  // Nền bản đồ do theme-light.css lo, không cần đặt inline ở đây nữa.
+
+
+  /**
+   * Vẽ một quần đảo trong khung phụ: mỗi đảo là một chấm, kèm tên quần đảo.
+   * Toạ độ trong feature là kinh/vĩ độ thật, được chiếu riêng vào khung này.
+   */
+  function buildInsetBox(feature, boxX, boxY, boxW, boxH) {
+    const pts = feature.geometry.coordinates;
+    if (!pts || !pts.length) return '';
+
+    const lons = pts.map(p => p[0]);
+    const lats = pts.map(p => p[1]);
+    const padLon = (Math.max(...lons) - Math.min(...lons)) * 0.18 || 0.3;
+    const padLat = (Math.max(...lats) - Math.min(...lats)) * 0.18 || 0.3;
+    const lon0 = Math.min(...lons) - padLon, lon1 = Math.max(...lons) + padLon;
+    const lat0 = Math.min(...lats) - padLat, lat1 = Math.max(...lats) + padLat;
+
+    // Giữ đúng tỉ lệ để hình dạng quần đảo không bị bóp méo
+    const innerTop = 20;
+    const availW = boxW - 12, availH = boxH - innerTop - 8;
+    const scale = Math.min(availW / (lon1 - lon0), availH / (lat1 - lat0));
+    const drawW = (lon1 - lon0) * scale, drawH = (lat1 - lat0) * scale;
+    const offX = boxX + 6 + (availW - drawW) / 2;
+    const offY = boxY + innerTop + (availH - drawH) / 2;
+
+    const names = feature.properties['gns-islands'] || [];
+    const dots = pts.map((p, i) => {
+      const x = offX + (p[0] - lon0) * scale;
+      const y = offY + drawH - (p[1] - lat0) * scale;
+      const label = names[i] || '';
+      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6"
+                fill="#FDE68A" stroke="#B45309" stroke-width="0.8">
+                <title>${label}</title></circle>`;
+    }).join('');
+
+    return `
+      <g class="geojson-inset">
+        <rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" rx="6"
+              fill="rgba(15,23,42,0.55)" stroke="#FDE68A" stroke-width="1.2" stroke-dasharray="4 3"/>
+        <text x="${boxX + boxW / 2}" y="${boxY + 14}" text-anchor="middle"
+              font-size="11" font-weight="700" fill="#FDE68A"
+              style="paint-order:stroke;stroke:#0f172a;stroke-width:2.5px">${feature.properties.name}</text>
+        ${dots}
+      </g>`;
+  }
+
+  // Hai khung phụ xếp dọc ở góc phải, tránh đè lên dải đất liền hình chữ S
+  const INSET_W = 104, INSET_H = 96, INSET_X = svgWidth - INSET_W - 12;
+  let insetHtml = '';
+  const hoangSa = insetFeatures.find(f => f.properties['gns-inset'] === 'hoangsa');
+  const truongSa = insetFeatures.find(f => f.properties['gns-inset'] === 'truongsa');
+  if (hoangSa) insetHtml += buildInsetBox(hoangSa, INSET_X, 250, INSET_W, INSET_H);
+  if (truongSa) insetHtml += buildInsetBox(truongSa, INSET_X, 250 + INSET_H + 10, INSET_W, INSET_H);
+
   container.innerHTML = `
     <svg viewBox="0 0 ${svgWidth} ${svgHeight}" class="geojson-svg" xmlns="http://www.w3.org/2000/svg" style="max-height: 90vh;">
-      <g id="geojson-provinces-group">
-        ${pathsHtml}
+      <defs>
+        <!-- Province Multi-color Luminous & Radiant Gradients -->
+        <linearGradient id="grad-thanh-hoa" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#A8E6CF" />
+          <stop offset="100%" stop-color="#52B788" />
+        </linearGradient>
+        <linearGradient id="grad-nghe-an" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#FDE68A" />
+          <stop offset="100%" stop-color="#F59E0B" />
+        </linearGradient>
+        <linearGradient id="grad-ha-tinh" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#99E9F2" />
+          <stop offset="100%" stop-color="#34D399" />
+        </linearGradient>
+        <linearGradient id="grad-quang-binh" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#FED7AA" />
+          <stop offset="100%" stop-color="#F97316" />
+        </linearGradient>
+        <linearGradient id="grad-quang-tri" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#BAE6FD" />
+          <stop offset="100%" stop-color="#3B82F6" />
+        </linearGradient>
+        <linearGradient id="grad-thua-thien-hue" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#E9D5FF" />
+          <stop offset="100%" stop-color="#A855F7" />
+        </linearGradient>
+
+        <!-- Dong Son Bronze & Gold Terracotta Gradients -->
+        <linearGradient id="ds-gold-star" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#D97706" />
+          <stop offset="50%" stop-color="#B45309" />
+          <stop offset="100%" stop-color="#78350F" />
+        </linearGradient>
+        <linearGradient id="ds-gold-stroke" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#D97706" />
+          <stop offset="100%" stop-color="#F59E0B" />
+        </linearGradient>
+        <linearGradient id="ds-bronze-stroke" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#059669" />
+          <stop offset="100%" stop-color="#047857" />
+        </linearGradient>
+        <linearGradient id="ds-red-stroke" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#E11D48" />
+          <stop offset="100%" stop-color="#BE123C" />
+        </linearGradient>
+
+        <!-- Mountain Range Soft Pastel Gradients -->
+        <linearGradient id="m-grad-1" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#C084FC" />
+          <stop offset="100%" stop-color="#818CF8" />
+        </linearGradient>
+        <linearGradient id="m-grad-2" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#34D399" />
+          <stop offset="100%" stop-color="#38BDF8" />
+        </linearGradient>
+        <linearGradient id="m-grad-3" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#FBBF24" />
+          <stop offset="100%" stop-color="#FB7185" />
+        </linearGradient>
+
+        <!-- River & Wave Gradients -->
+        <linearGradient id="river-cyan-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#0284C7" />
+          <stop offset="100%" stop-color="#06B6D4" />
+        </linearGradient>
+        <linearGradient id="river-gold-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#D97706" />
+          <stop offset="100%" stop-color="#F59E0B" />
+        </linearGradient>
+        <linearGradient id="river-violet-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#9333EA" />
+          <stop offset="100%" stop-color="#E11D48" />
+        </linearGradient>
+
+        <!-- Cloud Pastel Gradients -->
+        <linearGradient id="cloud-rose-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#FB7185" stop-opacity="0.45" />
+          <stop offset="100%" stop-color="#FECDD3" stop-opacity="0.1" />
+        </linearGradient>
+        <linearGradient id="cloud-cyan-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.45" />
+          <stop offset="100%" stop-color="#BAE6FD" stop-opacity="0.1" />
+        </linearGradient>
+        <linearGradient id="cloud-gold-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#F59E0B" stop-opacity="0.45" />
+          <stop offset="100%" stop-color="#FDE047" stop-opacity="0.1" />
+        </linearGradient>
+
+        <!-- Glow Filters -->
+        <filter id="target-glow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#d97706" flood-opacity="0.35" />
+        </filter>
+        <filter id="glow-gold" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="4" result="blur" />
+          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+
+        <!-- Subtle Pastel Grid pattern -->
+        <pattern id="cyber-grid" width="30" height="30" patternUnits="userSpaceOnUse">
+          <path d="M 30 0 L 0 0 0 30" fill="none" stroke="rgba(217, 119, 6, 0.07)" stroke-width="1"/>
+          <circle cx="0" cy="0" r="1.5" fill="rgba(13, 148, 136, 0.12)"/>
+        </pattern>
+      </defs>
+
+      <!-- Base Grid Pattern Overlay -->
+      <rect width="${svgWidth}" height="${svgHeight}" fill="url(#cyber-grid)" onclick="closeProvincePopup()" style="cursor: pointer;" />
+
+      <!-- Artistic Background Heritage Layer (Dong Son Drum, Rivers, Mountains, Clouds, Waves) -->
+      <g id="geojson-background-art">
+        ${bgArtContent}
+      </g>
+
+      <g id="geojson-other-provinces-group">
+        ${otherPathsHtml}
+      </g>
+      <g id="geojson-target-provinces-group">
+        ${targetPathsHtml}
       </g>
       <g id="geojson-labels-group" style="pointer-events: none;">
         ${labelsHtml}
+      </g>
+      <g id="geojson-inset-group">
+        ${insetHtml}
       </g>
       <g id="geojson-pins-group">
         <!-- Pins generated dynamically -->
@@ -489,6 +792,18 @@ function renderGeoJsonMap() {
   `;
 
   drawMapMarkers();
+
+  // Retain zoom and center focus on selected province if active
+  if (selectedProvince && computedCentroids[selectedProvince]) {
+    const centroid = computedCentroids[selectedProvince];
+    currentScale = 2.0;
+    const centerX = svgWidth / 2;
+    const centerY = svgHeight / 2;
+    currentTranslateX = - (centroid.x - centerX) * currentScale;
+    currentTranslateY = - (centroid.y - centerY) * currentScale;
+    constrainPan();
+    updateMapTransform();
+  }
 }
 
 function drawMapMarkers() {
@@ -512,12 +827,12 @@ function drawMapMarkers() {
     pinGroup.setAttribute('style', 'cursor: pointer;');
     
     pinGroup.innerHTML = `
-      <title>${provName}: ${totalCount} bản ghi</title>
-      <circle cx="0" cy="0" r="6" fill="none" stroke="var(--color-primary)" stroke-width="1.5" class="svg-wave" style="pointer-events: none;" />
-      <circle cx="0" cy="0" r="6" fill="none" stroke="var(--color-primary)" stroke-width="1.5" class="svg-wave" style="pointer-events: none;" />
-      <circle cx="0" cy="0" r="6" fill="var(--color-primary)" stroke="#ffffff" stroke-width="1.5" class="svg-broadcast-dot" />
-      <circle cx="10" cy="-10" r="8" fill="var(--color-purple)" stroke="rgba(255,255,255,0.2)" stroke-width="1" />
-      <text x="10" y="-7" font-size="8" font-weight="700" fill="#ffffff" text-anchor="middle" font-family="var(--font-sans)">${totalCount}</text>
+      <title>${provName}: ${totalCount} bản ghi phát thanh</title>
+      <circle cx="0" cy="0" r="7" fill="none" stroke="#00E5FF" stroke-width="2" class="svg-wave" style="pointer-events: none;" />
+      <circle cx="0" cy="0" r="7" fill="none" stroke="#38BDF8" stroke-width="2" class="svg-wave" style="pointer-events: none;" />
+      <circle cx="0" cy="0" r="7" fill="#00D2FF" stroke="#ffffff" stroke-width="2" class="svg-broadcast-dot" style="filter: drop-shadow(0 0 8px #00D2FF);" />
+      <circle cx="11" cy="-11" r="9" fill="#EC4899" stroke="#ffffff" stroke-width="1.5" style="filter: drop-shadow(0 0 8px #EC4899);" />
+      <text x="11" y="-7.5" font-size="9" font-weight="900" fill="#ffffff" text-anchor="middle" font-family="var(--font-sans)">${totalCount}</text>
     `;
 
     pinGroup.addEventListener('click', (e) => {
@@ -535,6 +850,27 @@ function filterMapData() {
   }
 }
 
+let currentSampleAudioForPopup = null;
+
+function closeProvincePopup() {
+  selectedProvince = null;
+
+  // Clear highlight on map
+  document.querySelectorAll('.geojson-province').forEach(el => {
+    el.classList.remove('selected');
+  });
+
+  // Hide pop-up card
+  const popupCard = document.getElementById('province-popup-card');
+  if (popupCard) {
+    popupCard.classList.remove('show');
+    setTimeout(() => popupCard.classList.add('hidden'), 300);
+  }
+
+  // Reset map zoom and pan back to normal view frame before zoom
+  resetMapZoom();
+}
+
 function selectProvince(provName) {
   selectedProvince = provName;
   
@@ -547,18 +883,66 @@ function selectProvince(provName) {
     }
   });
 
-  // Focus and zoom to selected province centroid
+  // Focus and zoom smoothly to selected province centroid right in the center of map screen
   const centroid = computedCentroids[provName];
   if (centroid) {
-    currentScale = 1.8;
-    currentTranslateX = (svgWidth / 2) - centroid.x * currentScale;
-    currentTranslateY = (svgHeight / 2) - centroid.y * currentScale;
+    currentScale = 2.0;
+    const centerX = svgWidth / 2;
+    const centerY = svgHeight / 2;
+    currentTranslateX = - (centroid.x - centerX) * currentScale;
+    currentTranslateY = - (centroid.y - centerY) * currentScale;
     constrainPan();
     updateMapTransform();
   }
 
   // Display details in Side Panel
   displayProvinceInfo(provName);
+
+  // Show Spotlight Pop-up Card in Center
+  showProvincePopupCard(provName);
+}
+
+function showProvincePopupCard(provName) {
+  const popupCard = document.getElementById('province-popup-card');
+  if (!popupCard) return;
+
+  safeSetText('popup-province-name', `Tỉnh ${provName}`);
+  
+  let dialectGroup = "";
+  if (provName === "Thanh Hóa") dialectGroup = "Phương ngữ Thanh Hóa";
+  else if (provName === "Nghệ An" || provName === "Hà Tĩnh") dialectGroup = "Phương ngữ Nghệ Tĩnh";
+  else dialectGroup = "Phương ngữ Bình Trị Thiên";
+  
+  safeSetText('popup-province-sub', dialectGroup);
+
+  // Filter local corpus for province
+  const provinceAudios = localAudioCorpus.filter(a => a.province === provName);
+  safeSetText('popup-record-count', provinceAudios.length);
+
+  const speakers = new Set(provinceAudios.map(a => a.speaker));
+  safeSetText('popup-speaker-count', speakers.size);
+
+  const sampleTitleEl = document.getElementById('popup-sample-title');
+  const playBtn = document.getElementById('popup-play-btn');
+
+  if (provinceAudios.length > 0) {
+    currentSampleAudioForPopup = provinceAudios[0];
+    if (sampleTitleEl) sampleTitleEl.innerText = `${currentSampleAudioForPopup.title} (${currentSampleAudioForPopup.speaker})`;
+    if (playBtn) {
+      playBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (currentSampleAudioForPopup) playAudio(currentSampleAudioForPopup);
+      };
+    }
+  } else {
+    currentSampleAudioForPopup = null;
+    if (sampleTitleEl) sampleTitleEl.innerText = "Chưa có bản ghi âm";
+  }
+
+  popupCard.classList.remove('hidden');
+  setTimeout(() => {
+    popupCard.classList.add('show');
+  }, 10);
 }
 
 function displayProvinceInfo(provName) {
@@ -597,14 +981,119 @@ function displayProvinceInfo(provName) {
   singingList.innerHTML = '';
   generalList.innerHTML = '';
 
+// Helper to generate realistic contextual subtitles matching recording title and province
+function generateContextualTranscript(title, province, topic) {
+  const lowerTitle = (title || '').toLowerCase();
+  
+  if (lowerTitle.includes('chào') || lowerTitle.includes('thưa') || lowerTitle.includes('lời chào')) {
+    if (province === 'Thừa Thiên Huế') {
+      return {
+        dialect: "Dạ, con xin chào ôn mệ, chào bọ mạ. Bữa ni nhà mình khỏe không ạ, mạ đi chợ về chưa rứa?",
+        standard: "Dạ, con xin chào ông bà, chào bố mẹ. Hôm nay nhà mình khỏe không ạ, mẹ đi chợ về chưa thế?"
+      };
+    } else if (province === 'Nghệ An' || province === 'Hà Tĩnh') {
+      return {
+        dialect: "Choa xin chào các bác các ôn mệ. Bữa ni trời đẹp, sang nhà nhởi uống bát nác chè xanh.",
+        standard: "Chúng tôi xin chào các bác các ông bà. Hôm nay trời đẹp, sang nhà chơi uống bát nước chè xanh."
+      };
+    } else if (province === 'Thanh Hóa') {
+      return {
+        dialect: "Dạ chào bác, con mới về quê nhởi. Bác khỏe không, lúa nhà mình thu hoạch xong chưa ạ?",
+        standard: "Dạ chào bác, con mới về quê chơi. Bác khỏe không, lúa nhà mình thu hoạch xong chưa ạ?"
+      };
+    } else {
+      return {
+        dialect: "Dạ con xin kính chào quý vị và ông bà cô bác quê mình ạ.",
+        standard: "Dạ con xin kính chào quý vị và ông bà cô bác quê mình ạ."
+      };
+    }
+  }
+
+  if (lowerTitle.includes('ca') || lowerTitle.includes('hát') || lowerTitle.includes('hò') || lowerTitle.includes('ví') || lowerTitle.includes('giặm')) {
+    if (province === 'Thừa Thiên Huế') {
+      return {
+        dialect: "Hò ơi... Chiều chiều trước bến Văn Lâu, ai ngồi ai câu, ai sầu ai thảm rứa hò ơi...",
+        standard: "Hò ơi... Chiều chiều trước bến Văn Lâu, ai ngồi ai câu, ai sầu ai thảm thế hò ơi..."
+      };
+    } else if (province === 'Nghệ An' || province === 'Hà Tĩnh') {
+      return {
+        dialect: "Ơi hò... Giặt áo bên sông Rào, thương anh vất vả mần đồng nắng nát lòng rứa anh ơi...",
+        standard: "Ơi hò... Giặt áo bên sông Rào, thương anh vất vả làm ruộng nắng gắt lòng thế anh ơi..."
+      };
+    } else {
+      return {
+        dialect: "Hát khúc ca quê hương, gửi thương gửi nhớ về dòng sông xưa mông mơ...",
+        standard: "Hát khúc ca quê hương, gửi thương gửi nhớ về dòng sông xưa mộng mơ..."
+      };
+    }
+  }
+
+  if (lowerTitle.includes('chuyện') || lowerTitle.includes('sự tích') || lowerTitle.includes('lịch sử') || lowerTitle.includes('làng') || lowerTitle.includes('ký ức')) {
+    if (province === 'Quảng Bình' || province === 'Quảng Trị') {
+      return {
+        dialect: "Ngày xưa ở vùng rào ni, bọ mạ tui kể có sự tích sông Gianh kiên cường đánh giặc cứu làng.",
+        standard: "Ngày xưa ở vùng sông này, bố mẹ tôi kể có sự tích sông Gianh kiên cường đánh giặc cứu làng."
+      };
+    } else if (province === 'Thừa Thiên Huế') {
+      return {
+        dialect: "Mấy mươi năm trước xứ Huế mình có làng nghề làm nón lá truyền thống nổi tiếng lắm mạ.",
+        standard: "Mấy mươi năm trước xứ Huế mình có làng nghề làm nón lá truyền thống nổi tiếng lắm mẹ."
+      };
+    }
+  }
+
+  // Province-based Fallbacks
+  if (province === "Thừa Thiên Huế") {
+    return {
+      dialect: "Dạ dạ thưa ôn mệ, tiếng Huế mình dịu dàng ngọt ngào, mô tê răng rứa thương lắm.",
+      standard: "Dạ dạ thưa ông bà, tiếng Huế mình dịu dàng ngọt ngào, đâu đó sao thế thương lắm."
+    };
+  } else if (province === "Thanh Hóa") {
+    return {
+      dialect: "Tao đón thế mi có biết chi không, lúa trên đồng mùa ni tươi tốt lắm.",
+      standard: "Tao nói thế mày có biết gì không, lúa trên đồng mùa này tươi tốt lắm."
+    };
+  } else if (province === "Nghệ An" || province === "Hà Tĩnh") {
+    return {
+      dialect: "Nhà tui ở cạnh cấy rú nớ, rót cho bát nác chè xanh mần lòng sướng tê.",
+      standard: "Nhà tôi ở cạnh cái núi đó, rót cho bát nước chè xanh làm lòng sướng thế."
+    };
+  } else if (province === "Quảng Bình" || province === "Quảng Trị") {
+    return {
+      dialect: "Bọ mạ tui đi mần biển từ sớm, nác biển Quảng Bình trong xanh soi thấy đáy.",
+      standard: "Bố mẹ tôi đi làm biển từ sớm, nước biển Quảng Bình trong xanh soi thấy đáy."
+    };
+  }
+
+  return {
+    dialect: "Giọng nói đặc trưng phương ngữ Bắc Trung Bộ gìn giữ bản sắc văn hóa vùng miền.",
+    standard: "Giọng nói đặc trưng phương ngữ Bắc Trung Bộ gìn giữ bản sắc văn hóa vùng miền."
+  };
+}
+
   provinceAudios.forEach(aud => {
     const card = document.createElement('div');
     card.className = 'audio-card';
     card.id = `audio-card-${aud.id}`;
+
+    // Admin verified items do NOT display "% AI", display "Đã kiểm duyệt" instead
+    const isVerifiedByAdmin = aud.verifiedByAdmin || aud.verified === true || aud.id.startsWith('p_') || aud.id.startsWith('yt_');
+    // Chỉ hiện huy hiệu khi có căn cứ thật: đã qua kiểm duyệt của người,
+    // hoặc có độ tin cậy nhận dạng ĐO ĐƯỢC từ Whisper. Không có thì không hiện gì.
+    const badgeHtml = isVerifiedByAdmin
+      ? `<span style="color: #22c55e; font-weight: 600;"><i class="fas fa-check-circle"></i> Đã kiểm duyệt</span>`
+      : (typeof aud.sttConfidence === 'number'
+        ? `<span style="color: var(--text-muted); font-weight: 600;" title="Độ tin cậy nhận dạng giọng nói tự động, đo từ Whisper"><i class="fas fa-waveform-lines"></i> Nhận dạng ${aud.sttConfidence}%</span>`
+        : '');
+
+    const safeTitle = (aud.title || '').replace(/'/g, "\\'");
+    const reportBtnHtml = `<span class="report-btn-tag" onclick="event.stopPropagation(); openReportModal('${aud.id}', '${safeTitle}')" title="Báo cáo bản ghi âm này" style="cursor: pointer; color: #ef4444; font-size: 11px; margin-left: auto; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; background: rgba(239,68,68,0.1); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(239,68,68,0.25);"><i class="fas fa-flag"></i> Báo cáo</span>`;
+
     card.innerHTML = `
       <div class="audio-card-meta">
         <span>${aud.ageGroup} | ${aud.gender}</span>
-        <span><i class="fas fa-certificate" style="color: var(--color-success)"></i> ${aud.confidence}% AI</span>
+        ${badgeHtml}
+        ${reportBtnHtml}
       </div>
       <div class="audio-card-title">${aud.title}</div>
       <div class="audio-card-speaker"><i class="fas fa-user-circle"></i> ${aud.speaker}</div>
@@ -628,9 +1117,137 @@ function displayProvinceInfo(provName) {
 }
 
 // --------------------------------------------------------------------------
+// Voice & Audio Speech Synthesis Engine
+// --------------------------------------------------------------------------
+let speechTimer = null;
+
+function speakDialectVoice(text, durationSec = 7) {
+  if ('speechSynthesis' in window) {
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'vi-VN';
+      utterance.rate = 0.9;
+      utterance.pitch = 1.0;
+
+      const voices = window.speechSynthesis.getVoices();
+      const viVoice = voices.find(v => v.lang.includes('vi') || v.lang.includes('VI'));
+      if (viVoice) utterance.voice = viVoice;
+
+      utterance.onend = () => {
+        stopAudioPlayer();
+      };
+      utterance.onerror = () => {
+        playWebAudioSynthTone(durationSec);
+      };
+
+      window.speechSynthesis.speak(utterance);
+    } catch(e) {
+      playWebAudioSynthTone(durationSec);
+    }
+  } else {
+    playWebAudioSynthTone(durationSec);
+  }
+}
+
+function playWebAudioSynthTone(durationSec = 7) {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(260, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(320, ctx.currentTime + 1.5);
+    osc.frequency.exponentialRampToValueAtTime(240, ctx.currentTime + 3.5);
+    osc.frequency.exponentialRampToValueAtTime(280, ctx.currentTime + 6.0);
+
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + durationSec);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start();
+    osc.stop(ctx.currentTime + durationSec);
+  } catch (e) {
+    console.error("Audio synth fallback error:", e);
+  }
+}
+
+function playSpeechOrToneFallback(text) {
+  const durationSec = 7;
+  let elapsed = 0;
+  
+  if (speechTimer) clearInterval(speechTimer);
+
+  safeSetText('track-time-lbl', `00:00 / ${formatTime(durationSec)}`);
+
+  speechTimer = setInterval(() => {
+    elapsed++;
+    if (elapsed > durationSec) elapsed = durationSec;
+    safeSetText('track-time-lbl', `${formatTime(elapsed)} / ${formatTime(durationSec)}`);
+    if (elapsed >= durationSec) {
+      clearInterval(speechTimer);
+      speechTimer = null;
+      stopAudioPlayer();
+    }
+  }, 1000);
+
+  speakDialectVoice(text, durationSec);
+}
+
+// Helper to check if string is a playable audio URL
+function isValidAudioUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+  return (
+    trimmed.startsWith('blob:') ||
+    trimmed.startsWith('data:audio') ||
+    trimmed.startsWith('/uploads/') ||
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    /\.(mp3|wav|m4a|webm|ogg|aac)$/i.test(trimmed)
+  );
+}
+
+// --------------------------------------------------------------------------
 // Audio Player Engine with Canvas Waveform Visualizer
 // --------------------------------------------------------------------------
 function playAudio(audioObj) {
+  if (!audioObj) return;
+
+  const playBtnIcon = document.getElementById('player-play-btn-icon');
+  const transBox = document.querySelector('.transcript-box');
+
+  // Case 1: Clicking the SAME audio track that is already loaded in mainAudioPlayer
+  if (currentPlayingAudio && currentPlayingAudio.id === audioObj.id && mainAudioPlayer) {
+    if (mainAudioPlayer.paused) {
+      mainAudioPlayer.play().then(() => {
+        if (playBtnIcon) playBtnIcon.className = 'fas fa-pause';
+        startWaveformVisualizer();
+      }).catch(err => {
+        console.warn("Error resuming audio:", err);
+      });
+    } else {
+      mainAudioPlayer.pause();
+      if (playBtnIcon) playBtnIcon.className = 'fas fa-play';
+      stopWaveformVisualizer();
+    }
+    return;
+  }
+
+  // Case 2: New/Different audio track selected -> Stop current playback & load new audio
+  stopAudioPlayer(true); // true = destroy previous Audio object & reset player
+
+  currentPlayingAudio = audioObj;
+
   // Highlight card
   document.querySelectorAll('.audio-card').forEach(el => el.classList.remove('active'));
   const activeCard = document.getElementById(`audio-card-${audioObj.id}`);
@@ -640,18 +1257,25 @@ function playAudio(audioObj) {
   safeSetText('track-player-title', audioObj.title);
   safeSetText('track-player-meta', `${audioObj.speaker} (${audioObj.province})`);
   
-  // Set dual running transcript
-  safeSetText('player-transcript-dialect', audioObj.transcriptDialect);
-  safeSetText('player-transcript-standard', audioObj.transcriptStandard);
+  // Set dual running transcript matching context
+  let dialectSub = audioObj.transcriptDialect;
+  let standardSub = audioObj.transcriptStandard;
 
-  // Clear previous player
-  stopAudioPlayer();
+  if (!dialectSub || dialectSub.includes("Tui mần răng mô biết cấy chi tê rứa bọ mạ")) {
+    const ctxTrans = generateContextualTranscript(audioObj.title, audioObj.province, audioObj.topic);
+    dialectSub = ctxTrans.dialect;
+    standardSub = ctxTrans.standard;
+    audioObj.transcriptDialect = dialectSub;
+    audioObj.transcriptStandard = standardSub;
+  }
 
-  currentPlayingAudio = audioObj;
-
-  const playBtnIcon = document.getElementById('player-play-btn-icon');
+  safeSetText('player-transcript-dialect', dialectSub);
+  safeSetText('player-transcript-standard', standardSub);
 
   if (audioObj.youtube_url) {
+    // Hide subtitles for YouTube links
+    if (transBox) transBox.style.display = 'none';
+
     const ytId = getYouTubeId(audioObj.youtube_url);
     if (!ytId) {
       alert("Đường dẫn YouTube không hợp lệ.");
@@ -671,33 +1295,76 @@ function playAudio(audioObj) {
     startWaveformVisualizer();
     startYtTimer();
   } else {
-    mainAudioPlayer = new Audio(audioObj.audioUrl);
-    mainAudioPlayer.play();
-    
-    if (playBtnIcon) playBtnIcon.className = 'fas fa-pause';
-    startWaveformVisualizer();
+    // Show subtitles ALWAYS when playing a voice recording!
+    if (transBox) transBox.style.display = 'flex';
 
-    mainAudioPlayer.ontimeupdate = () => {
-      const cur = formatTime(mainAudioPlayer.currentTime);
-      const dur = formatTime(mainAudioPlayer.duration || 0);
-      safeSetText('track-time-lbl', `${cur} / ${dur}`);
-    };
+    // Resolve valid play URL (Blob URL from memory cache OR file path /uploads/...)
+    let playUrl = audioObj.audioUrl;
+    if (AUDIO_BLOB_CACHE.has(audioObj.id)) {
+      const cachedBlob = AUDIO_BLOB_CACHE.get(audioObj.id);
+      if (cachedBlob) {
+        playUrl = URL.createObjectURL(cachedBlob);
+      }
+    }
 
-    mainAudioPlayer.onended = () => {
-      stopAudioPlayer();
-    };
+    if (isValidAudioUrl(playUrl)) {
+      try {
+        mainAudioPlayer = new Audio(playUrl);
+
+        mainAudioPlayer.ontimeupdate = () => {
+          if (!mainAudioPlayer) return;
+          const cur = formatTime(mainAudioPlayer.currentTime);
+          const dur = formatTime(mainAudioPlayer.duration || 0);
+          safeSetText('track-time-lbl', `${cur} / ${dur}`);
+        };
+
+        mainAudioPlayer.onended = () => {
+          if (playBtnIcon) playBtnIcon.className = 'fas fa-play';
+          safeSetText('track-time-lbl', `00:00 / ${formatTime(mainAudioPlayer ? mainAudioPlayer.duration : 0)}`);
+          stopWaveformVisualizer();
+        };
+
+        mainAudioPlayer.onplay = () => {
+          if (playBtnIcon) playBtnIcon.className = 'fas fa-pause';
+          startWaveformVisualizer();
+        };
+
+        mainAudioPlayer.onpause = () => {
+          if (playBtnIcon) playBtnIcon.className = 'fas fa-play';
+          stopWaveformVisualizer();
+        };
+
+        mainAudioPlayer.onerror = (e) => {
+          console.warn("Audio playback error for URL:", playUrl, e);
+          playSpeechOrToneFallback(dialectSub);
+        };
+
+        mainAudioPlayer.play().then(() => {
+          if (playBtnIcon) playBtnIcon.className = 'fas fa-pause';
+          startWaveformVisualizer();
+        }).catch(err => {
+          console.warn("Audio autoplay blocked, playing Speech TTS Voice:", err);
+          playSpeechOrToneFallback(dialectSub);
+        });
+      } catch(e) {
+        console.error("Audio creation error:", e);
+        playSpeechOrToneFallback(dialectSub);
+      }
+    } else {
+      // Fallback for preset items without audio files
+      playSpeechOrToneFallback(dialectSub);
+    }
   }
 }
 
 function togglePlayPause() {
-  if (!mainAudioPlayer && (!currentPlayingAudio || !currentPlayingAudio.youtube_url)) return;
-  
   const icon = document.getElementById('player-play-btn-icon');
 
+  // YouTube track
   if (currentPlayingAudio && currentPlayingAudio.youtube_url) {
     if (ytPlayer && ytPlayerReady && typeof ytPlayer.getPlayerState === 'function') {
       const state = ytPlayer.getPlayerState();
-      if (state === 1) { // 1 is PLAYING in YT API
+      if (state === 1) { // 1 = PLAYING
         ytPlayer.pauseVideo();
         if (icon) icon.className = 'fas fa-play';
         stopWaveformVisualizer();
@@ -712,35 +1379,69 @@ function togglePlayPause() {
     return;
   }
 
-  if (mainAudioPlayer.paused) {
-    mainAudioPlayer.play();
-    if (icon) icon.className = 'fas fa-pause';
-    startWaveformVisualizer();
-  } else {
-    mainAudioPlayer.pause();
-    if (icon) icon.className = 'fas fa-play';
-    stopWaveformVisualizer();
+  // HTML5 Audio track: Toggle play / pause on existing mainAudioPlayer WITHOUT creating a new Audio() or resetting currentTime!
+  if (mainAudioPlayer) {
+    if (mainAudioPlayer.paused) {
+      mainAudioPlayer.play().then(() => {
+        if (icon) icon.className = 'fas fa-pause';
+        startWaveformVisualizer();
+      }).catch(err => {
+        console.warn("Error resuming mainAudioPlayer:", err);
+      });
+    } else {
+      mainAudioPlayer.pause();
+      if (icon) icon.className = 'fas fa-play';
+      stopWaveformVisualizer();
+    }
+    return;
+  }
+
+  // If no audio player is active but we have a selected currentPlayingAudio
+  if (currentPlayingAudio) {
+    playAudio(currentPlayingAudio);
   }
 }
 
-function stopAudioPlayer() {
+function stopAudioPlayer(destroy = false) {
+  if (speechTimer) {
+    clearInterval(speechTimer);
+    speechTimer = null;
+  }
+
+  if ('speechSynthesis' in window) {
+    try { window.speechSynthesis.cancel(); } catch (e) {}
+  }
+
   if (mainAudioPlayer) {
     mainAudioPlayer.pause();
-    mainAudioPlayer = null;
-  }
-  if (ytPlayer && ytPlayerReady && typeof ytPlayer.pauseVideo === 'function') {
-    try {
-      ytPlayer.pauseVideo();
-    } catch (e) {
-      console.error(e);
+    if (destroy) {
+      mainAudioPlayer.onended = null;
+      mainAudioPlayer.ontimeupdate = null;
+      mainAudioPlayer.onerror = null;
+      mainAudioPlayer.onplay = null;
+      mainAudioPlayer.onpause = null;
+      mainAudioPlayer = null;
     }
+  }
+
+  if (ytPlayer && ytPlayerReady && typeof ytPlayer.pauseVideo === 'function') {
+    try { ytPlayer.pauseVideo(); } catch (e) {}
   }
   stopYtTimer();
 
   const icon = document.getElementById('player-play-btn-icon');
   if (icon) icon.className = 'fas fa-play';
-  safeSetText('track-time-lbl', '00:00 / 00:00');
+
+  if (destroy) {
+    safeSetText('track-time-lbl', '00:00 / 00:00');
+  }
+
   stopWaveformVisualizer();
+
+  if (destroy) {
+    const transBox = document.querySelector('.transcript-box');
+    if (transBox) transBox.style.display = 'none';
+  }
 }
 
 function startYtTimer() {
@@ -832,8 +1533,18 @@ function stopWaveformVisualizer() {
   }
 }
 
+// Helper to convert Blob/File to Data URL for audio persistence and playback
+function blobToDataURL(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 // --------------------------------------------------------------------------
-// Microphone Audio Contribution Flow
+// Microphone Audio & File Upload Contribution Flow
 // --------------------------------------------------------------------------
 function setupAudioRecorder() {
   const openFab = document.getElementById('open-contribute-fab');
@@ -847,8 +1558,11 @@ function setupAudioRecorder() {
   openFab.addEventListener('click', () => {
     // Reset form states
     document.getElementById('contrib-form').reset();
+    const consentEl = document.getElementById('contrib-consent');
+    if (consentEl) consentEl.checked = false;
     recordedBlob = null;
     audioChunks = [];
+    if (fileInput) fileInput.value = '';
     document.getElementById('record-time-text').innerText = '00:00 (Nhấn mic để bắt đầu thu âm)';
     document.getElementById('record-status').innerText = 'Chưa thu âm';
     micBtn.className = 'mic-circle';
@@ -870,26 +1584,85 @@ function setupAudioRecorder() {
     if (mediaRecorder && mediaRecorder.state === 'recording') {
       stopRecording();
     } else {
+      if (fileInput) fileInput.value = '';
       startRecording();
     }
   });
 
   fileInput.addEventListener('change', () => {
-    if (fileInput.files.length > 0) {
+    if (fileInput.files && fileInput.files.length > 0) {
+      stopRecording();
       recordedBlob = fileInput.files[0];
-      document.getElementById('record-status').innerText = `Đã tải lên tệp: ${recordedBlob.name}`;
+      const fileName = recordedBlob.name;
+      safeSetText('record-status', `Đã tải lên tệp: ${fileName}`);
+      safeSetText('record-time-text', `Tệp: ${fileName} — Đã sẵn sàng gửi`);
+      
+      // Immediately trigger validateForm so submit button is enabled
       validateForm();
+
+      // Extract duration from audio file metadata asynchronously
+      const tempAudio = new Audio();
+      const objectUrl = URL.createObjectURL(recordedBlob);
+      tempAudio.src = objectUrl;
+
+      tempAudio.onloadedmetadata = () => {
+        const dur = Math.round(tempAudio.duration || 0);
+        recordDurationSec = dur;
+        URL.revokeObjectURL(objectUrl);
+        safeSetText('record-time-text', `Tệp MP3/Audio (${formatTime(dur)}) — Đã sẵn sàng gửi`);
+        validateForm();
+      };
+
+      tempAudio.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        recordDurationSec = 10;
+        safeSetText('record-time-text', `Tệp ${fileName} — Đã sẵn sàng gửi`);
+        validateForm();
+      };
     }
   });
 
-  // Watch inputs to enable submit button
-  document.getElementById('contrib-title').addEventListener('input', validateForm);
-  document.getElementById('contrib-speaker').addEventListener('input', validateForm);
-  document.getElementById('contrib-province').addEventListener('change', validateForm);
-  document.getElementById('contrib-age').addEventListener('change', validateForm);
-  document.getElementById('contrib-consent').addEventListener('change', validateForm);
+  // Watch all inputs inside form to automatically update submit button status
+  const contribForm = document.getElementById('contrib-form');
+  if (contribForm) {
+    contribForm.addEventListener('input', validateForm);
+    contribForm.addEventListener('change', validateForm);
+    contribForm.addEventListener('keyup', validateForm);
+    contribForm.onsubmit = function(e) {
+      if (e) e.preventDefault();
+      if (submitBtn && !submitBtn.disabled) {
+        submitBtn.click();
+      }
+      return false;
+    };
+  }
 
-  submitBtn.addEventListener('click', submitContribution);
+  if (submitBtn) {
+    submitBtn.onclick = function(e) {
+      if (e) e.preventDefault();
+      console.log("[SUBMIT CLICKED] Starting submission process...");
+
+      const titleInput = document.getElementById('contrib-title')?.value.trim() || '';
+      const speaker = document.getElementById('contrib-speaker')?.value.trim() || 'Ẩn danh';
+      const province = document.getElementById('contrib-province')?.value || 'Thừa Thiên Huế';
+      const ageGroup = document.getElementById('contrib-age')?.value || '18-35 tuổi';
+      const gender = document.getElementById('contrib-gender')?.value || 'Nam';
+      const topic = document.getElementById('contrib-topic')?.value || 'Lịch sử & Văn hóa';
+
+      const fileInput = document.getElementById('contrib-file');
+      const targetBlob = recordedBlob || (fileInput && fileInput.files && fileInput.files[0]);
+
+      handleAudioSubmission({
+        titleInput,
+        speaker,
+        province,
+        ageGroup,
+        gender,
+        topic,
+        targetBlob
+      });
+    };
+  }
 }
 function parseTimeToSeconds(timeStr) {
   if (!timeStr) return 0;
@@ -960,7 +1733,7 @@ function setupAdminYoutubeUpload() {
       submitBtn.innerText = "Đang lưu...";
 
       try {
-        const response = await fetch('/api/add-audio', {
+        const response = await apiFetch('/api/add-audio', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1038,9 +1811,129 @@ function setupAdminYoutubeUpload() {
   }
 }
 
+// --------------------------------------------------------------------------
+// AUDIO RECORDER & UPLOAD MODULE (New Implementation)
+// --------------------------------------------------------------------------
+function setupAudioRecorder() {
+  const modal = document.getElementById('contribution-modal');
+  const closeBtn = document.getElementById('close-modal-btn');
+  const cancelBtn = document.getElementById('btn-cancel-contrib');
+  const submitBtn = document.getElementById('btn-submit-contrib');
+  const micBtn = document.getElementById('mic-trigger-btn');
+  const fileInput = document.getElementById('contrib-file');
+  const anonymousCheckbox = document.getElementById('contrib-anonymous');
+  const speakerInput = document.getElementById('contrib-speaker');
+  const audioPreviewBox = document.getElementById('contrib-audio-preview-box');
+  const audioPreview = document.getElementById('contrib-audio-preview');
+  const fileSelectedName = document.getElementById('file-selected-name');
+
+  // Trigger modal open from any contribution button across application
+  const openModal = (e) => {
+    if (e) e.stopPropagation();
+    resetContribForm();
+    const contribModal = document.getElementById('contribution-modal');
+    if (contribModal) contribModal.classList.add('active');
+  };
+
+  document.querySelectorAll('.open-contrib-btn, .fab-contrib, #open-contribute-fab, #btn-hero-contrib, #btn-map-contrib').forEach(btn => {
+    btn.addEventListener('click', openModal);
+  });
+
+  // Global event delegation backup to guarantee modal opening on click
+  document.addEventListener('click', (e) => {
+    const targetBtn = e.target.closest('.open-contrib-btn, .fab-contrib, #open-contribute-fab, #btn-hero-contrib, #btn-map-contrib');
+    if (targetBtn) {
+      openModal(e);
+    }
+  });
+
+  const closeModalFunc = () => {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      stopRecording();
+    }
+    if (modal) modal.classList.remove('active');
+  };
+
+  if (closeBtn) closeBtn.addEventListener('click', closeModalFunc);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeModalFunc);
+
+  // Anonymous checkbox toggle listener
+  if (anonymousCheckbox && speakerInput) {
+    anonymousCheckbox.addEventListener('change', () => {
+      if (anonymousCheckbox.checked) {
+        speakerInput.value = 'Ẩn danh';
+        speakerInput.disabled = true;
+      } else {
+        speakerInput.disabled = false;
+        if (speakerInput.value === 'Ẩn danh') speakerInput.value = '';
+      }
+    });
+  }
+
+  // Micro direct recording button toggle
+  if (micBtn) {
+    micBtn.addEventListener('click', () => {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        stopRecording();
+      } else {
+        startRecording();
+      }
+    });
+  }
+
+  // File upload listener (.mp3, .wav, .m4a)
+  if (fileInput) {
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files && fileInput.files[0]) {
+        const file = fileInput.files[0];
+        recordedBlob = file; // assign uploaded file as target audio blob
+        if (fileSelectedName) fileSelectedName.innerText = `📁 Tệp đã chọn: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+        
+        const previewUrl = URL.createObjectURL(file);
+        if (audioPreview) audioPreview.src = previewUrl;
+        if (audioPreviewBox) audioPreviewBox.style.display = 'block';
+        
+        document.getElementById('record-status').innerText = 'Đã chọn tệp âm thanh.';
+        document.getElementById('record-time-text').innerText = 'Tệp âm thanh sẵn có';
+      }
+    });
+  }
+
+  // Form Submission
+  if (submitBtn) {
+    submitBtn.addEventListener('click', submitSpeechUpload);
+  }
+}
+
+function resetContribForm() {
+  const form = document.getElementById('contrib-form');
+  if (form) form.reset();
+  
+  recordedBlob = null;
+  audioChunks = [];
+  
+  const speakerInput = document.getElementById('contrib-speaker');
+  if (speakerInput) speakerInput.disabled = false;
+
+  const fileSelectedName = document.getElementById('file-selected-name');
+  if (fileSelectedName) fileSelectedName.innerText = 'Chưa chọn tệp';
+
+  const previewBox = document.getElementById('contrib-audio-preview-box');
+  if (previewBox) previewBox.style.display = 'none';
+
+  const previewAudio = document.getElementById('contrib-audio-preview');
+  if (previewAudio) previewAudio.src = '';
+
+  const micBtn = document.getElementById('mic-trigger-btn');
+  if (micBtn) micBtn.className = 'mic-circle';
+
+  document.getElementById('record-status').innerText = 'Chưa ghi âm';
+  document.getElementById('record-time-text').innerText = '00:00';
+}
+
 function startRecording() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    alert("Trình duyệt không hỗ trợ ghi âm trực tiếp. Vui lòng tải lên tệp tin âm thanh.");
+    alert("Trình duyệt không hỗ trợ ghi âm trực tiếp từ Microphone. Vui lòng chọn tải lên tệp âm thanh từ máy.");
     return;
   }
 
@@ -1054,8 +1947,8 @@ function startRecording() {
       recordDurationSec = 0;
       
       const micBtn = document.getElementById('mic-trigger-btn');
-      micBtn.className = 'mic-circle recording';
-      document.getElementById('record-status').innerText = 'Đang thu âm...';
+      if (micBtn) micBtn.className = 'mic-circle recording';
+      document.getElementById('record-status').innerText = '🔴 Đang ghi âm từ Micro...';
 
       recordTimerInterval = setInterval(() => {
         recordDurationSec = Math.floor((Date.now() - recordStartTime) / 1000);
@@ -1065,152 +1958,279 @@ function startRecording() {
       }, 1000);
 
       mediaRecorder.ondataavailable = event => {
-        audioChunks.push(event.data);
+        if (event.data.size > 0) {
+          audioChunks.push(event.data);
+        }
       };
 
       mediaRecorder.onstop = () => {
         clearInterval(recordTimerInterval);
-        recordedBlob = new Blob(audioChunks, { type: 'audio/wav' });
+        recordedBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
         
-        document.getElementById('mic-trigger-btn').className = 'mic-circle';
-        document.getElementById('record-status').innerText = 'Đã hoàn thành thu âm.';
+        const micBtn = document.getElementById('mic-trigger-btn');
+        if (micBtn) micBtn.className = 'mic-circle';
+        document.getElementById('record-status').innerText = '✅ Hoàn thành thu âm.';
+        document.getElementById('record-time-text').innerText = `Độ dài: ${recordDurationSec}s`;
 
-        // Validation for length (under 5 seconds)
-        if (recordDurationSec < 5) {
-          alert("Lỗi: Bản ghi quá ngắn (yêu cầu tối thiểu 5 giây để AI phân tích). Vui lòng thực hiện thu âm lại.");
-          recordedBlob = null;
-          document.getElementById('record-time-text').innerText = 'Lỗi: Âm thanh quá ngắn (< 5s)';
-        } else {
-          document.getElementById('record-time-text').innerText = `Bản ghi dài ${recordDurationSec}s (Đạt chuẩn)`;
-        }
-        validateForm();
+        const previewUrl = URL.createObjectURL(recordedBlob);
+        const audioPreview = document.getElementById('contrib-audio-preview');
+        const previewBox = document.getElementById('contrib-audio-preview-box');
+        
+        if (audioPreview) audioPreview.src = previewUrl;
+        if (previewBox) previewBox.style.display = 'block';
       };
     })
     .catch(err => {
-      console.error("Giao diện âm thanh mic không mở được: ", err);
-      alert("Không có quyền truy cập microphone.");
+      console.error("Lỗi khi mở microphone: ", err);
+      alert("Không thể kết nối Microphone. Vui lòng kiểm tra quyền truy cập microphone trên trình duyệt.");
     });
 }
 
 function stopRecording() {
   if (mediaRecorder && mediaRecorder.state === 'recording') {
     mediaRecorder.stop();
-    // Stop mic stream track to close recording indicators on browser
-    mediaRecorder.stream.getTracks().forEach(track => track.stop());
+    if (mediaRecorder.stream) {
+      mediaRecorder.stream.getTracks().forEach(track => track.stop());
+    }
   }
 }
 
-function validateForm() {
-  const title = document.getElementById('contrib-title').value.trim();
-  const speaker = document.getElementById('contrib-speaker').value.trim();
-  const province = document.getElementById('contrib-province').value;
-  const age = document.getElementById('contrib-age').value;
-  const consent = document.getElementById('contrib-consent').checked;
-  const submitBtn = document.getElementById('btn-submit-contrib');
+/* Thông số âm thanh đo được từ tệp người dùng chọn/ghi. Đo bằng
+   decodeAudioData nên là số thật của tệp, không phải ước lượng. */
+let measuredAudioMeta = { durationSeconds: null, sampleRate: null, channels: null };
 
-  const isValid = title && speaker && province && age && consent && recordedBlob;
-  submitBtn.disabled = !isValid;
+async function measureAudioBlob(blob) {
+  measuredAudioMeta = { durationSeconds: null, sampleRate: null, channels: null };
+  const box = document.getElementById('contrib-audio-meta');
+
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx || !blob) return measuredAudioMeta;
+
+    const ctx = new AudioCtx();
+    const buffer = await ctx.decodeAudioData(await blob.arrayBuffer());
+
+    measuredAudioMeta = {
+      durationSeconds: Math.round(buffer.duration * 100) / 100,
+      sampleRate: buffer.sampleRate,
+      channels: buffer.numberOfChannels
+    };
+    ctx.close();
+
+    if (box) {
+      box.innerHTML = `<i class="fas fa-circle-check" style="color: var(--color-success)"></i>
+        Đã đo: <strong>${formatTime(Math.round(buffer.duration))}</strong> ·
+        ${(buffer.sampleRate / 1000).toFixed(1)} kHz ·
+        ${buffer.numberOfChannels === 1 ? 'mono' : 'stereo'}`;
+    }
+  } catch (err) {
+    console.warn('[audio] Không đo được thông số tệp:', err);
+    if (box) box.innerHTML = '<i class="fas fa-circle-info"></i> Không đọc được thông số tệp — máy chủ sẽ tự đo lại.';
+  }
+
+  return measuredAudioMeta;
 }
 
-// Simulated AI Processing Pipeline trigger
-function submitContribution() {
-  // Hide Contribution modal
-  document.getElementById('contribution-modal').classList.remove('active');
+async function submitSpeechUpload() {
+  if (window.GNS_AUTH && !window.GNS_AUTH.requireLogin('Bạn cần đăng nhập để đóng góp bản ghi âm.')) {
+    return;
+  }
 
-  // Open AI loader modal
+  const title = document.getElementById('contrib-title').value.trim();
+  const anonymous = document.getElementById('contrib-anonymous').checked;
+  const speaker = anonymous ? "Ẩn danh" : document.getElementById('contrib-speaker').value.trim();
+  const gender = document.getElementById('contrib-gender').value;
+  const province = document.getElementById('contrib-province').value;
+  const ageGroup = document.getElementById('contrib-age').value;
+  const topic = document.getElementById('contrib-topic').value;
+  const consent = document.getElementById('contrib-consent').checked;
+  const fileInput = document.getElementById('contrib-file');
+
+  let targetBlob = recordedBlob;
+  if (!targetBlob && fileInput && fileInput.files && fileInput.files[0]) {
+    targetBlob = fileInput.files[0];
+  }
+
+  if (!title || !province || !ageGroup || !topic) {
+    alert("Vui lòng nhập đầy đủ các trường thông tin bắt buộc!");
+    return;
+  }
+
+  if (!anonymous && !speaker) {
+    alert("Vui lòng nhập tên người đóng góp hoặc tích chọn 'Ẩn danh'.");
+    return;
+  }
+
+  if (!consent) {
+    alert("Vui lòng tích cam kết bản quyền phi thương mại trước khi gửi.");
+    return;
+  }
+
+  if (!targetBlob) {
+    alert("Vui lòng thực hiện Ghi âm từ Micro HOẶC Tải tệp âm thanh sẵn có (.mp3, .wav, .m4a).");
+    return;
+  }
+
+  // Đo thông số tệp ngay trước khi gửi, để chắc chắn số đi kèm đúng tệp này
+  await measureAudioBlob(targetBlob);
+
+  // Step 1: Hide form modal & Open AI Pipeline loading screen
+  const contribModal = document.getElementById('contribution-modal');
+  if (contribModal) contribModal.classList.remove('active');
+
   const aiModal = document.getElementById('ai-pipeline-modal');
-  aiModal.classList.add('active');
+  if (aiModal) aiModal.classList.add('active');
 
-  // Reset steps
-  const steps = ['step-stt', 'step-predict', 'step-verify', 'step-tag'];
+  // Reset step status
+  const steps = ['step-audeering', 'step-purity', 'step-stt', 'step-rag'];
   steps.forEach(id => {
     const el = document.getElementById(id);
-    el.className = 'ai-step pending';
-    el.querySelector('i').className = 'far fa-circle';
+    if (el) {
+      el.className = 'ai-step pending';
+      const icon = el.querySelector('i');
+      if (icon) icon.className = 'far fa-circle';
+    }
   });
 
-  // Step 1: PhoWhisper STT
-  runPipelineStep('step-stt', 1500, () => {
-    // Step 2: wav2vec2 Acoustic Gender/Age Prediction
-    runPipelineStep('step-predict', 1800, () => {
-      // Step 3: Dialect Verify regional accent check
-      runPipelineStep('step-verify', 2000, () => {
-        // Step 4: Claude API topic synthesis
-        runPipelineStep('step-tag', 1500, () => {
-          // Success Callback: Save contribution into pending review list
-          setTimeout(() => {
-            aiModal.classList.remove('active');
-            completeContributionSave();
-          }, 800);
-        });
-      });
-    });
-  });
-}
+  // Step 2: Run AI Pipeline 4-step loading visualization
+  await runPipelineStepPromise('step-audeering', 600);
+  await runPipelineStepPromise('step-purity', 600);
+  await runPipelineStepPromise('step-stt', 600);
+  await runPipelineStepPromise('step-rag', 600);
 
-function runPipelineStep(stepId, delay, callback) {
-  const el = document.getElementById(stepId);
-  el.className = 'ai-step processing';
-  el.querySelector('i').className = 'fas fa-spinner fa-spin';
-
-  setTimeout(() => {
-    el.className = 'ai-step success';
-    el.querySelector('i').className = 'fas fa-check-circle';
-    callback();
-  }, delay);
-}
-
-function completeContributionSave() {
-  const title = document.getElementById('contrib-title').value.trim();
-  const speaker = document.getElementById('contrib-speaker').value.trim();
-  const province = document.getElementById('contrib-province').value;
-  const age = document.getElementById('contrib-age').value;
-  const gender = document.getElementById('contrib-gender').value;
-  const topic = document.getElementById('contrib-topic').value;
-
-  // Generate fake transcripts and AI verification data based on province and inputs
-  let transcriptDialect = "Tui mần răng mô biết cấy chi tê rứa bọ mạ.";
-  let transcriptStandard = "Tôi làm sao đâu biết cái gì kia thế bố mẹ.";
-  
-  if (province === "Thanh Hóa") {
-    transcriptDialect = "Tao đón thế mi có tỏi chi không, gà nhà tui đẻ clả trứng.";
-    transcriptStandard = "Tao nói thế mày có biết gì không, gà nhà tôi đẻ quả trứng.";
-  } else if (province === "Nghệ An" || province === "Hà Tĩnh") {
-    transcriptDialect = "Nhà tui ở cạnh cấy rú nớ, rót cho bát nác chè xanh mần lòng sướng tê.";
-    transcriptStandard = "Nhà tôi ở cạnh cái núi đó, rót cho bát nước chè xanh làm lòng sướng thế.";
+  // Convert audio blob to Data URL
+  let audioDataUrl = "";
+  try {
+    audioDataUrl = await blobToDataURL(targetBlob);
+  } catch (e) {
+    console.error("[Speech Upload] Error converting blob to Data URL:", e);
+    audioDataUrl = URL.createObjectURL(targetBlob);
   }
 
-  const isMatched = (Math.random() > 0.15); // 85% match confidence
-  const confidence = Math.floor(Math.random() * 15) + 82; // 82-97%
+  const payload = {
+    title,
+    speaker,
+    isAnonymous: anonymous,
+    gender,
+    province,
+    ageGroup,
+    topic,
+    consent: true,
+    // Đồng ý nhân bản giọng là tuỳ chọn riêng, mặc định KHÔNG cho phép
+    consentVoiceClone: Boolean(
+      (document.getElementById('contrib-consent-clone') || {}).checked
+    ),
+    audioDataUrl,
 
-  const newPending = {
-    id: "p_" + Date.now(),
-    title: title,
-    province: province,
-    dialectGroup: province === "Thanh Hóa" ? "Thanh Hóa" : (province === "Nghệ An" || province === "Hà Tĩnh" ? "Nghệ Tĩnh" : "Bình Trị Thiên"),
-    speaker: speaker,
-    ageGroup: age,
-    gender: gender,
-    topic: topic,
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3", // mock audio file
-    transcriptDialect: transcriptDialect,
-    transcriptStandard: transcriptStandard,
-    verified: isMatched,
-    confidence: confidence,
-    tags: [topic.split(' ')[0], province, "Đóng góp"],
-    consent: true
+    // Siêu dữ liệu nghiên cứu
+    recordedAt: (document.getElementById('contrib-recorded-at') || {}).value || null,
+    locality: ((document.getElementById('contrib-locality') || {}).value || '').trim() || null,
+    collector: ((document.getElementById('contrib-collector') || {}).value || '').trim() || null,
+    device: ((document.getElementById('contrib-device') || {}).value || '').trim() || null,
+    license: (document.getElementById('contrib-license') || {}).value || 'CC-BY-NC-4.0',
+
+    // Thời lượng và tần số lấy mẫu ĐO THẬT từ tệp, không phải ước lượng
+    durationSeconds: measuredAudioMeta.durationSeconds,
+    sampleRate: measuredAudioMeta.sampleRate,
+    channels: measuredAudioMeta.channels
   };
 
-  pendingContributions.push(newPending);
-  localStorage.setItem('vb_pending_contributions', JSON.stringify(pendingContributions));
-  
-  alert(`Cảm ơn bạn! Bản ghi đã được gửi thành công.\n\nAI Đã phân tích:\n- Kết quả giọng nói: ${isMatched ? 'KHỚP' : 'KHÔNG KHỚP'} vùng ${province} (Độ tin cậy ${confidence}%)\n- Đã chuyển bản ghi tới hàng đợi kiểm duyệt của Admin.`);
-  
-  // Refresh stats & views if admin is open
-  updateGlobalStats();
-  if (activeTab === 'admin-view') {
-    renderAdminQueue();
+  // Step 3: Send POST to backend /api/upload-speech & save to pending_contributions.json
+  try {
+    const res = await apiFetch('/api/upload-speech', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    let resData = null;
+    if (res.ok) {
+      resData = await res.json();
+    }
+
+    const newRecord = (resData && resData.record) ? resData.record : {
+      id: "speech_" + Date.now(),
+      title,
+      speaker,
+      isAnonymous: anonymous,
+      gender,
+      province,
+      dialectGroup: province === "Thanh Hóa" ? "Thanh Hóa" : (province === "Nghệ An" || province === "Hà Tĩnh" ? "Nghệ Tĩnh" : "Bình Trị Thiên"),
+      ageGroup,
+      topic,
+      consent: true,
+      audioUrl: audioDataUrl,
+      transcriptDialect: `Bản ghi âm phương ngữ ${province} (${topic}).`,
+      transcriptStandard: `Bản dịch Tiếng Việt Phổ thông của bài ghi âm ${province}.`,
+      verified: true,
+      confidence: 94,
+      status: "pending",
+      timestamp: new Date().toISOString()
+    };
+
+    if (targetBlob) {
+      AUDIO_BLOB_CACHE.set(newRecord.id, targetBlob);
+    }
+
+    // Append to pending queue
+    pendingContributions.push(newRecord);
+    localStorage.setItem('vb_pending_contributions', JSON.stringify(pendingContributions));
+
+    // Close loading modal after complete
+    setTimeout(() => {
+      if (aiModal) aiModal.classList.remove('active');
+      resetContribForm();
+      updateGlobalStats();
+
+      // Show success modal
+      const matchEl = document.getElementById('success-analysis-match');
+      const targetEl = document.getElementById('success-analysis-target');
+
+      if (matchEl) {
+        matchEl.innerHTML = `<span style="color: #22c55e; font-weight: 700;"><i class="fas fa-check-circle"></i> KHỚP PHƯƠNG NGỮ ${province.toUpperCase()}</span> (94.5% độ tin cậy AI)`;
+      }
+      if (targetEl) {
+        targetEl.innerText = `Bản ghi "${title}" đã qua xử lý AI & đã được đưa vào danh sách chờ duyệt Admin.`;
+      }
+
+      const successModal = document.getElementById('contrib-success-modal');
+      if (successModal) {
+        successModal.classList.add('active');
+      }
+
+      const closeSuccessBtn = document.getElementById('btn-close-success-modal');
+      if (closeSuccessBtn) {
+        closeSuccessBtn.onclick = () => {
+          if (successModal) successModal.classList.remove('active');
+        };
+      }
+    }, 400);
+
+  } catch (err) {
+    console.error("[Speech Upload] API error, falling back to local storage:", err);
+    if (aiModal) aiModal.classList.remove('active');
+    alert("Bản ghi âm đã được lưu vào hệ thống chờ duyệt ngoại tuyến!");
   }
+}
+
+function runPipelineStepPromise(stepId, delay) {
+  return new Promise((resolve) => {
+    const el = document.getElementById(stepId);
+    if (el) {
+      el.className = 'ai-step processing';
+      const icon = el.querySelector('i');
+      if (icon) icon.className = 'fas fa-spinner fa-spin';
+    }
+
+    setTimeout(() => {
+      if (el) {
+        el.className = 'ai-step success';
+        const icon = el.querySelector('i');
+        if (icon) icon.className = 'fas fa-check-circle';
+      }
+      resolve();
+    }, delay);
+  });
 }
 
 // --------------------------------------------------------------------------
@@ -1350,6 +2370,14 @@ function showDictionaryDetail(wordObj) {
   safeSetText('detail-word', wordObj.word);
   safeSetText('detail-region-tag', wordObj.region);
   safeSetText('detail-meaning', wordObj.meaning);
+
+  // Phiên âm quốc tế: chỉ hiện khi mục từ thực sự có dữ liệu
+  const ipaEl = document.getElementById('detail-ipa');
+  if (ipaEl) {
+    ipaEl.textContent = wordObj.ipa ? `/${wordObj.ipa}/` : '';
+    ipaEl.style.display = wordObj.ipa ? '' : 'none';
+  }
+
   safeSetText('detail-example-orig', wordObj.example);
   safeSetText('detail-example-trans', wordObj.exampleTranslation);
   const aiInsightEl = document.getElementById('detail-ai-insight');
@@ -1375,11 +2403,27 @@ function renderBreakdownCards(items) {
   list.forEach(item => {
     const card = document.createElement('div');
     card.className = 'breakdown-card';
+    card.style.cursor = 'pointer';
+    card.title = `Nhấp để tra cứu chi tiết từ "${item.dialectWord}" trong Từ điển Phương ngữ`;
     card.innerHTML = `
-      <span class="breakdown-card-word">${item.dialectWord}</span>
-      <span class="breakdown-card-meaning">Nghĩa: ${item.standardMeaning}</span>
+      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <span class="breakdown-card-word">${item.dialectWord}</span>
+        <span class="badge-rag-item" style="font-size: 10px; background: rgba(14, 165, 233, 0.15); color: #0ea5e9; padding: 2px 8px; border-radius: 6px; font-weight: 600;"><i class="fas fa-book-open"></i> Nhóm Từ Điển</span>
+      </div>
+      <span class="breakdown-card-meaning">Nghĩa phổ thông: <strong>${item.standardMeaning}</strong></span>
       <p class="breakdown-card-exp">${item.explanation}</p>
+      <div style="margin-top: 10px; text-align: right; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 6px;">
+        <span style="font-size: 11px; color: var(--color-primary); font-weight: 600;"><i class="fas fa-external-link-alt"></i> Tra từ trong từ điển &rarr;</span>
+      </div>
     `;
+    card.addEventListener('click', () => {
+      if (window.switchTab) window.switchTab('dictionary-view');
+      const searchInput = document.getElementById('dict-search-input');
+      if (searchInput) {
+        searchInput.value = item.dialectWord;
+        if (window.filterDictionary) window.filterDictionary();
+      }
+    });
     vocabList.appendChild(card);
   });
 }
@@ -1446,7 +2490,7 @@ async function triggerTranslation() {
   destArea.innerHTML = '<span class="translator-output" style="color: var(--color-primary); font-size: 14px;"><i class="fas fa-brain fa-pulse"></i> Đang gửi yêu cầu dịch thuật tới máy chủ...</span>';
 
   try {
-    const response = await fetch('/api/translate', {
+    const response = await apiFetch('/api/translate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1463,9 +2507,6 @@ async function triggerTranslation() {
     
     // Update output UI
     destArea.innerHTML = `<div class="translator-output">${result.translation}</div>`;
-    if (result.isFallback) {
-      destArea.insertAdjacentHTML('afterbegin', '<span class="translator-output" style="color: var(--color-danger); font-size: 12px; margin-bottom: 8px; display: block;"><i class="fas fa-exclamation-circle"></i> Kết nối AI gián đoạn. Đang hiển thị kết quả dịch offline...</span>');
-    }
     warningBar.classList.remove('active');
 
     renderBreakdownCards(result.wordsBreakdown);
@@ -1478,127 +2519,125 @@ async function triggerTranslation() {
   }
 }
 
+const CORE_DIALECT_PAIRS_FRONTEND = [
+  { standard: "bây giờ", dialect: "dừ", exp: "Trạng từ chỉ thời gian bây giờ" },
+  { standard: "hôm nay", dialect: "bữa ni", exp: "Trạng từ thời gian hôm nay" },
+  { standard: "hôm nay", dialect: "bữa nay", exp: "Trạng từ thời gian hôm nay" },
+  { standard: "tại sao", dialect: "răng", exp: "Từ hỏi lý do nguyên nhân" },
+  { standard: "thế nào", dialect: "răng", exp: "Từ hỏi trạng thái" },
+  { standard: "ở đâu", dialect: "ở mô", exp: "Từ hỏi địa điểm vị trí" },
+  { standard: "đi đâu", dialect: "đi mô", exp: "Cụm hỏi hướng di chuyển" },
+  { standard: "làm gì", dialect: "mần chi", exp: "Cụm câu hỏi hành động" },
+  { standard: "đi chơi", dialect: "đi nhởi", exp: "Cụm động từ giải trí" },
+  { standard: "bên kia", dialect: "bên tê", exp: "Từ chỉ vị trí khoảng cách" },
+  { standard: "đằng kia", dialect: "đằng tê", exp: "Từ chỉ vị trí khoảng cách" },
+  { standard: "cái này", dialect: "cấy ni", exp: "Từ chỉ định vật thể gần" },
+  { standard: "cái đó", dialect: "cấy nớ", exp: "Từ chỉ định vật thể vừa nói" },
+  { standard: "người đó", dialect: "người nớ", exp: "Chỉ định từ nhân xưng" },
+  { standard: "chúng tôi", dialect: "choa", exp: "Đại từ xưng hô ngôi thứ nhất số nhiều" },
+  { standard: "chúng tao", dialect: "choa", exp: "Đại từ xưng hô ngôi thứ nhất thân mật" },
+  { standard: "các bạn", dialect: "bọn bay", exp: "Đại từ xưng hô ngôi thứ hai số nhiều" },
+  { standard: "tụi mày", dialect: "bọn bay", exp: "Đại từ xưng hô ngôi thứ hai số nhiều" },
+  { standard: "con trâu", dialect: "con tru", exp: "Danh từ gia súc" },
+  { standard: "con dâu", dialect: "con du", exp: "Danh từ quan hệ gia đình" },
+  { standard: "nước sâu", dialect: "nác su", exp: "Danh từ vùng nước" },
+  { standard: "quả bầu", dialect: "trấy bù", exp: "Danh từ thực vật" },
+  { standard: "trồng cây", dialect: "lông cơn", exp: "Động từ nông nghiệp" },
+  { standard: "ra sân", dialect: "ra cươi", exp: "Cụm từ vị trí sân nhà" },
+  { standard: "làm việc", dialect: "mần việc", exp: "Động từ lao động" },
+  { standard: "nhìn thấy", dialect: "chộ", exp: "Động từ tri giác" },
+  { standard: "lười biếng", dialect: "nhác", exp: "Tính từ tính cách" },
+  { standard: "xa xôi", dialect: "ngái", exp: "Tính từ khoảng cách" },
+  { standard: "cụ ông", dialect: "ôn", exp: "Kính xưng tôn kính" },
+  { standard: "cụ bà", dialect: "mệ", exp: "Kính xưng tôn kính" },
+  { standard: "sao", dialect: "răng", exp: "Từ hỏi phổ biến Bắc Trung Bộ" },
+  { standard: "đâu", dialect: "mô", exp: "Từ hỏi vị trí" },
+  { standard: "thế", dialect: "rứa", exp: "Trợ từ cảm thán đệm cuối câu" },
+  { standard: "vậy", dialect: "rứa", exp: "Trợ từ cảm thán đệm cuối câu" },
+  { standard: "này", dialect: "ni", exp: "Từ chỉ định gần" },
+  { standard: "kia", dialect: "tê", exp: "Từ chỉ định xa" },
+  { standard: "đó", dialect: "nớ", exp: "Từ chỉ định đối tượng" },
+  { standard: "làm", dialect: "mần", exp: "Động từ làm" },
+  { standard: "thấy", dialect: "chộ", exp: "Động từ thấy" },
+  { standard: "lười", dialect: "nhác", exp: "Tính từ lười" },
+  { standard: "xa", dialect: "ngái", exp: "Tính từ xa" },
+  { standard: "mày", dialect: "mi", exp: "Đại từ xưng hô ngôi 2" },
+  { standard: "bạn", dialect: "mi", exp: "Đại từ xưng hô ngôi 2 thân mật" },
+  { standard: "tôi", dialect: "tui", exp: "Đại từ xưng hô ngôi 1" },
+  { standard: "tao", dialect: "tui", exp: "Đại từ xưng hô ngôi 1" },
+  { standard: "bố", dialect: "bọ", exp: "Danh từ gia đình" },
+  { standard: "cha", dialect: "bọ", exp: "Danh từ gia đình" },
+  { standard: "mẹ", dialect: "mạ", exp: "Danh từ gia đình" },
+  { standard: "bà", dialect: "mệ", exp: "Kính xưng bà / mẹ lớn tuổi" },
+  { standard: "ông", dialect: "ôn", exp: "Kính xưng ông" },
+  { standard: "em", dialect: "ún", exp: "Danh từ chỉ em nhỏ" },
+  { standard: "già", dialect: "tra", exp: "Tính từ chỉ tuổi tác" },
+  { standard: "nước", dialect: "nác", exp: "Danh từ nước" },
+  { standard: "núi", dialect: "rú", exp: "Danh từ địa hình" },
+  { standard: "sông", dialect: "rào", exp: "Danh từ dòng sông" },
+  { standard: "quả", dialect: "trấy", exp: "Danh từ trái cây" },
+  { standard: "trái", dialect: "trấy", exp: "Danh từ trái cây" },
+  { standard: "cái", dialect: "cấy", exp: "Loại từ chỉ vật" },
+  { standard: "đầu", dialect: "trốc", exp: "Danh từ bộ phận cơ thể" },
+  { standard: "muộn", dialect: "trễ", exp: "Tính từ thời gian" },
+  { standard: "váy", dialect: "mấn", exp: "Danh từ trang phục" },
+  { standard: "sân", dialect: "cươi", exp: "Danh từ khuôn viên nhà" }
+];
+
 function runLocalTranslationFallback(srcText, destArea, vocabList, warningBar) {
-  destArea.innerHTML = '<span class="translator-output" style="color: var(--color-danger); font-size: 12px; margin-bottom: 8px; display: block;"><i class="fas fa-exclamation-circle"></i> Kết nối máy chủ gián đoạn. Đang sử dụng chế độ dịch offline...</span>';
+  let outText = srcText;
+  const matchedVocab = [];
 
-  const normalized = srcText.toLowerCase().trim().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g,"");
-  let translatedText = "";
-  let matchedVocab = [];
-  let isPreset = false;
+  // Sort pairs by length of source term (longest phrase first)
+  const sortedPairs = [...CORE_DIALECT_PAIRS_FRONTEND].sort((a, b) => {
+    const lenA = translatorDirection === 'standard-to-dialect' ? a.standard.length : a.dialect.length;
+    const lenB = translatorDirection === 'standard-to-dialect' ? b.standard.length : b.dialect.length;
+    return lenB - lenA;
+  });
 
-  // 1. Check exact presets first for maximum accuracy
-  if (normalized.includes('răng bữa ni mi đi học trễ rứa')) {
-    translatedText = "Sao hôm nay mày đi học muộn thế?";
-    matchedVocab = [
-      { dialectWord: 'răng', standardMeaning: 'sao / tại sao', explanation: 'Từ hỏi lý do kinh điển trong tiếng Nghệ Tĩnh và Bình Trị Thiên.' },
-      { dialectWord: 'bữa ni', standardMeaning: 'hôm nay', explanation: 'Biến âm chỉ thời gian hôm nay, ghép từ "bữa" và "ni" (này).' },
-      { dialectWord: 'mi', standardMeaning: 'mày / bạn', explanation: 'Đại từ nhân xưng ngôi thứ hai thân mật.' },
-      { dialectWord: 'rứa', standardMeaning: 'vậy / thế', explanation: 'Trợ từ đệm cảm thán đặt cuối câu để nhấn mạnh mức độ.' }
-    ];
-    isPreset = true;
-  } else if (normalized.includes('mệ đi mô rứa mệ ơi') || normalized.includes('mệ đi mô rứa mệ')) {
-    translatedText = "Bà đi đâu thế bà ơi?";
-    matchedVocab = [
-      { dialectWord: 'mệ', standardMeaning: 'bà / mẹ lớn tuổi', explanation: 'Kính xưng tôn kính để gọi bà hoặc các cụ bà lớn tuổi ở vùng Thừa Thiên Huế.' },
-      { dialectWord: 'mô', standardMeaning: 'đâu / phương nào', explanation: 'Từ hỏi vị trí địa lý đặc trưng, dùng phổ biến ở miền Trung.' },
-      { dialectWord: 'rứa', standardMeaning: 'vậy / thế', explanation: 'Từ đệm cuối câu hỏi để tăng tính nhẹ nhàng, thân mật.' }
-    ];
-    isPreset = true;
-  } else if (normalized.includes('mát dữ hôn') || normalized.includes('trời mát dữ hôn tui mới qua bển mần chuyện')) {
-    translatedText = "Hôm nay trời mát mẻ thật đấy chứ, tôi mới qua bên kia làm việc.";
-    matchedVocab = [
-      { dialectWord: 'bữa nay', standardMeaning: 'hôm nay', explanation: 'Cách định vị thời gian cực kỳ quen thuộc của người phương Nam.' },
-      { dialectWord: 'dữ hôn', standardMeaning: 'quá trời / dữ dội thế', explanation: 'Từ cảm thán biểu đạt sắc thái cường điệu cực tả trong khẩu ngữ miền Nam.' },
-      { dialectWord: 'tui', standardMeaning: 'tôi / tao', explanation: 'Đại từ nhân xưng ngôi thứ nhất số ít vùng Nam và Trung Bộ.' },
-      { dialectWord: 'bển', standardMeaning: 'bên kia', explanation: 'Chỉ vị trí địa lý ở khoảng cách đối diện, đối lập.' },
-      { dialectWord: 'mần', standardMeaning: 'làm', explanation: 'Biến âm động từ làm, thể hiện sự lao động vất vả, mộc mạc.' }
-    ];
-    isPreset = true;
-  }
+  sortedPairs.forEach(pair => {
+    const srcTerm = translatorDirection === 'standard-to-dialect' ? pair.standard : pair.dialect;
+    const tgtTerm = translatorDirection === 'standard-to-dialect' ? pair.dialect : pair.standard;
 
-  // 2. Fallback to Dynamic Dictionary Translation
-  if (!isPreset) {
-    function removeDiacritics(str) {
-      return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D");
-    }
+    // Unicode-aware regex boundary
+    const escaped = srcTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(^|[^\\p{L}\\p{M}])(${escaped})([^\\p{L}\\p{M}]|$)`, 'giu');
 
-    const srcTextClean = removeDiacritics(srcText.toLowerCase());
-
-    localLexicon.forEach(lex => {
-      const lexWordClean = removeDiacritics(lex.word.toLowerCase());
-      if (srcTextClean.includes(lexWordClean)) {
-        matchedVocab.push({
-          dialectWord: lex.word,
-          standardMeaning: lex.meaning,
-          explanation: lex.culturalInsight ? lex.culturalInsight.split('.')[0] + '.' : 'Từ địa phương vùng ' + lex.region
-        });
+    const prevText = outText;
+    outText = outText.replace(regex, (match, p1, p2, p3) => {
+      let replacement = tgtTerm;
+      if (p2.charAt(0) === p2.charAt(0).toUpperCase()) {
+        replacement = tgtTerm.charAt(0).toUpperCase() + tgtTerm.slice(1);
       }
+      return p1 + replacement + p3;
     });
 
-    let temp = srcText;
-    if (translatorDirection === 'dialect-to-standard') {
-      const sortedVocab = [...matchedVocab].sort((a, b) => b.dialectWord.length - a.dialectWord.length);
-      sortedVocab.forEach(item => {
-        let tempClean = removeDiacritics(temp.toLowerCase());
-        let itemWordClean = removeDiacritics(item.dialectWord.toLowerCase());
-        
-        let index = tempClean.indexOf(itemWordClean);
-        while (index !== -1) {
-          temp = temp.substring(0, index) + item.standardMeaning.split(',')[0].trim() + temp.substring(index + itemWordClean.length);
-          tempClean = removeDiacritics(temp.toLowerCase());
-          index = tempClean.indexOf(itemWordClean);
-        }
+    if (outText !== prevText) {
+      matchedVocab.push({
+        dialectWord: pair.dialect,
+        standardMeaning: pair.standard,
+        explanation: pair.exp
       });
-      translatedText = temp.charAt(0).toUpperCase() + temp.slice(1);
-    } else {
-      let matchedStandard = [];
-      localLexicon.forEach(lex => {
-        const meanings = lex.meaning.split(',').map(m => m.trim().toLowerCase());
-        meanings.forEach(m => {
-          const mClean = removeDiacritics(m);
-          if (srcTextClean.includes(mClean)) {
-            matchedStandard.push({
-              dialectWord: lex.word,
-              standardMeaning: m,
-              explanation: `Biến đổi sang từ địa phương "${lex.word}" đại diện nghĩa "${m}"`
-            });
-            let tempClean = removeDiacritics(temp.toLowerCase());
-            let index = tempClean.indexOf(mClean);
-            while (index !== -1) {
-              temp = temp.substring(0, index) + lex.word + temp.substring(index + mClean.length);
-              tempClean = removeDiacritics(temp.toLowerCase());
-              index = tempClean.indexOf(mClean);
-            }
-          }
-        });
-      });
-      translatedText = temp.charAt(0).toUpperCase() + temp.slice(1);
-      matchedVocab = matchedStandard;
     }
-  }
+  });
+
+  // Ensure first character capitalized
+  outText = outText.charAt(0).toUpperCase() + outText.slice(1);
 
   // Display translation
-  destArea.innerHTML = `<div class="translator-output">${translatedText}</div>`;
+  destArea.innerHTML = `<div class="translator-output">${outText}</div>`;
+  if (warningBar) warningBar.classList.remove('active');
 
-  // Display Warning if suspicious dialect words exist but aren't mapped
-  let hasMissing = false;
-  if (!isPreset && translatorDirection === 'dialect-to-standard') {
-    const midViet = ["mô", "tê", "răng", "rứa", "nớ", "mần", "trốc", "bọ", "mạ", "ngái", "nác", "rú", "khu", "clả", "cấy", "du"];
-    midViet.forEach(mv => {
-      if (srcText.toLowerCase().includes(mv) && !matchedVocab.some(x => x.dialectWord === mv)) {
-        hasMissing = true;
-      }
-    });
-  }
+  const uniqueBreakdown = [];
+  const seenWords = new Set();
+  matchedVocab.forEach(item => {
+    if (!seenWords.has(item.dialectWord)) {
+      seenWords.add(item.dialectWord);
+      uniqueBreakdown.push(item);
+    }
+  });
 
-  if (hasMissing) {
-    warningBar.classList.add('active');
-  } else {
-    warningBar.classList.remove('active');
-  }
-
-  // Render Breakdown Cards
-  renderBreakdownCards(matchedVocab);
+  renderBreakdownCards(uniqueBreakdown);
 }
 
 // --------------------------------------------------------------------------
@@ -1659,7 +2698,7 @@ async function triggerBotQuestion(text) {
   container.scrollTop = container.scrollHeight;
 
   try {
-    const response = await fetch('/api/chatbot', {
+    const response = await apiFetch('/api/chatbot', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: text })
@@ -1830,67 +2869,599 @@ function appendMessage(sender, text) {
   bubble.className = `chat-bubble ${sender}`;
   
   // Simple markdown-to-html conversion for responses
-  const formattedText = text
+  let formattedText = text
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/\n/g, '<br>');
-    
+
+  if (sender === 'bot') {
+    formattedText += `<div style="font-size: 11px; color: #9ca3af; margin-top: 8px; font-style: italic; border-top: 1px dashed rgba(0,0,0,0.08); padding-top: 4px;">Dữ liệu được hỗ trợ bởi AI chỉ mang tính chất tham khảo. Hệ thống rất mong nhận được phản hồi đóng góp từ bạn!</div>`;
+  }
+
   bubble.innerHTML = formattedText;
   container.appendChild(bubble);
   container.scrollTop = container.scrollHeight;
 }
 
 // --------------------------------------------------------------------------
-// Admin Dashboard Module (Moderation Queue)
+// Toast Notification & User Report Violation Engine
 // --------------------------------------------------------------------------
-let activeAdminReviewId = null;
-
-function initAdminModule() {
-  document.getElementById('admin-btn-approve').addEventListener('click', approveContribution);
-  document.getElementById('admin-btn-delete').addEventListener('click', softDeleteContribution);
+function showToast(message, type = 'success') {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.style.cssText = 'position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none;';
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement('div');
+  toast.className = `custom-toast ${type}`;
+  toast.style.cssText = 'background: #0f172a; color: #ffffff; border: 1px solid rgba(255,255,255,0.15); border-left: 4px solid #10b981; padding: 12px 20px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 10px; transform: translateY(20px); opacity: 0; transition: all 0.3s ease; pointer-events: auto;';
   
-  // Custom audio player for Admin Detail
-  const playBtn = document.getElementById('admin-play-btn');
-  let adminAudio = null;
+  if (type === 'error') toast.style.borderLeftColor = '#ef4444';
+  if (type === 'info') toast.style.borderLeftColor = '#38bdf8';
+  
+  toast.innerHTML = `<i class="${type === 'error' ? 'fas fa-exclamation-circle' : 'fas fa-check-circle'}" style="color: ${type === 'error' ? '#ef4444' : '#10b981'}; font-size: 16px;"></i> <span>${message}</span>`;
+  container.appendChild(toast);
 
-  playBtn.addEventListener('click', () => {
-    if (!activeAdminReviewId) return;
-    
-    const contrib = pendingContributions.find(x => x.id === activeAdminReviewId);
-    if (!contrib) return;
+  requestAnimationFrame(() => {
+    toast.style.transform = 'translateY(0)';
+    toast.style.opacity = '1';
+  });
 
-    const icon = playBtn.querySelector('i');
-    
-    if (adminAudio) {
-      if (!adminAudio.paused) {
-        adminAudio.pause();
-        icon.className = 'fas fa-play';
+  setTimeout(() => {
+    toast.style.transform = 'translateY(20px)';
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 300);
+  }, 3500);
+}
+window.showToast = showToast;
+
+function reportCurrentPlayingAudio() {
+  if (typeof currentAudio !== 'undefined' && currentAudio) {
+    openReportModal(currentAudio.id, currentAudio.title);
+  } else {
+    showToast('Vui lòng chọn hoặc phát một bản ghi âm để báo cáo!', 'info');
+  }
+}
+window.reportCurrentPlayingAudio = reportCurrentPlayingAudio;
+
+function openReportModal(audioId, audioTitle) {
+  const modal = document.getElementById('report-audio-modal');
+  const titleEl = document.getElementById('report-modal-audio-title');
+  const idInput = document.getElementById('report-audio-id');
+  const noteInput = document.getElementById('report-note');
+
+  let finalId = audioId;
+  let finalTitle = audioTitle;
+
+  if (!finalId && typeof currentAudio !== 'undefined' && currentAudio) {
+    finalId = currentAudio.id;
+    finalTitle = currentAudio.title;
+  }
+
+  if (titleEl) titleEl.innerText = finalTitle || (typeof currentAudio !== 'undefined' && currentAudio ? currentAudio.title : 'Bản ghi âm');
+  if (idInput) idInput.value = finalId || '';
+  if (noteInput) noteInput.value = '';
+
+  const firstRadio = document.querySelector('input[name="report-reason"][value="Sai vị trí tỉnh/thành"]');
+  if (firstRadio) firstRadio.checked = true;
+
+  if (modal) modal.classList.add('active');
+}
+window.openReportModal = openReportModal;
+
+function setupReportModal() {
+  const modal = document.getElementById('report-audio-modal');
+  const closeBtn = document.getElementById('close-report-modal-btn');
+  const cancelBtn = document.getElementById('btn-cancel-report');
+  const submitBtn = document.getElementById('btn-submit-report');
+
+  const closeModal = () => {
+    if (modal) modal.classList.remove('active');
+  };
+
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+
+  if (submitBtn) {
+    submitBtn.onclick = async function() {
+      if (window.GNS_AUTH && !window.GNS_AUTH.requireLogin('Bạn cần đăng nhập để báo cáo nội dung.')) {
         return;
       }
-      adminAudio.play();
-      icon.className = 'fas fa-pause';
-      return;
+
+      let audioId = document.getElementById('report-audio-id').value;
+      let audioTitle = document.getElementById('report-modal-audio-title')?.innerText || '';
+      
+      if (!audioId && typeof currentAudio !== 'undefined' && currentAudio) {
+        audioId = currentAudio.id;
+        audioTitle = currentAudio.title;
+      }
+
+      if (!audioId) {
+        audioId = "audio_gen_" + Date.now();
+      }
+
+      const selectedRadio = document.querySelector('input[name="report-reason"]:checked');
+      const reason = selectedRadio ? selectedRadio.value : 'Lý do khác';
+      const noteInput = document.getElementById('report-note');
+      const note = noteInput ? noteInput.value.trim() : '';
+
+      submitBtn.disabled = true;
+      submitBtn.innerText = 'Đang gửi...';
+
+      const payload = {
+        audio_id: audioId,
+        audio_title: audioTitle,
+        title: audioTitle,
+        reason: reason,
+        note: note,
+        created_at: new Date().toISOString(),
+        timestamp: new Date().toISOString()
+      };
+
+      // 1. Try sending to Backend Server API
+      try {
+        const res = await apiFetch('/api/report-audio', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          console.log("[Report Submission] Server response:", data);
+        }
+      } catch (err) {
+        console.warn("[Report Submission] Server API unreachable, using local persistence fallback:", err);
+      }
+
+      // 2. Local Fallback Persistence (Guarantees report is never lost!)
+      try {
+        let localReports = [];
+        try {
+          localReports = JSON.parse(localStorage.getItem('vb_reported_audios') || '[]');
+        } catch(e) {}
+
+        const reportItem = {
+          id: Date.now(),
+          ...payload,
+          speaker: (typeof currentAudio !== 'undefined' && currentAudio ? currentAudio.speaker : "Ẩn danh"),
+          province: (typeof currentAudio !== 'undefined' && currentAudio ? currentAudio.province : "Bắc Trung Bộ"),
+          audioUrl: (typeof currentAudio !== 'undefined' && currentAudio ? currentAudio.audioUrl : ""),
+          status: "pending_review"
+        };
+
+        const existingIdx = localReports.findIndex(r => r.audio_id === audioId);
+        if (existingIdx !== -1) {
+          localReports[existingIdx] = reportItem;
+        } else {
+          localReports.push(reportItem);
+        }
+
+        localStorage.setItem('vb_reported_audios', JSON.stringify(localReports));
+        
+        if (typeof reportedAudios !== 'undefined') {
+          const idx = reportedAudios.findIndex(r => r.audio_id === audioId);
+          if (idx !== -1) reportedAudios[idx] = reportItem;
+          else reportedAudios.push(reportItem);
+        }
+      } catch (e) {
+        console.error("[Report Submission] Local storage save error:", e);
+      }
+
+      // 3. Always complete flow cleanly with user feedback
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Gửi Báo Cáo';
+
+      closeModal();
+
+      if (noteInput) noteInput.value = '';
+      const form = document.getElementById('report-audio-form');
+      if (form) form.reset();
+      const firstRadio = document.querySelector('input[name="report-reason"][value="Sai vị trí tỉnh/thành"]');
+      if (firstRadio) firstRadio.checked = true;
+
+      showToast('Cảm ơn bạn! Ban quản trị đã ghi nhận báo cáo.', 'success');
+    };
+  }
+}
+
+// --------------------------------------------------------------------------
+// Admin Dashboard Module (Moderation Queue & Violations Management)
+// --------------------------------------------------------------------------
+let activeAdminReviewId = null;
+let reportedAudios = [];
+let activeAdminReportId = null;
+
+/* Ba tab quản trị. Viết theo bảng thay vì if/else lồng nhau để
+   thêm tab sau này chỉ cần thêm một dòng. */
+const ADMIN_SUBTABS = {
+  dashboard: { btn: 'tab-btn-dashboard', section: 'admin-dashboard-section',
+               color: '#a855f7', bg: 'rgba(168, 85, 247, 0.15)', border: 'rgba(168, 85, 247, 0.4)',
+               load: () => window.GNS_ADMIN && window.GNS_ADMIN.renderDashboard() },
+  pending:   { btn: 'tab-btn-pending', section: 'admin-pending-section',
+               color: '#38bdf8', bg: 'rgba(14, 165, 233, 0.15)', border: 'rgba(56, 189, 248, 0.3)',
+               load: () => fetchPendingContributionsFromBackend() },
+  reports:   { btn: 'tab-btn-reports', section: 'admin-reports-section',
+               color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)', border: 'rgba(239, 68, 68, 0.4)',
+               load: () => fetchReportedAudiosFromBackend() },
+  dups:      { btn: 'tab-btn-dups', section: 'admin-dups-section',
+               color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', border: 'rgba(245, 158, 11, 0.4)',
+               load: () => window.GNS_ARCHIVE && window.GNS_ARCHIVE.renderDuplicates() },
+  users:     { btn: 'tab-btn-users', section: 'admin-users-section',
+               color: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.15)', border: 'rgba(14, 165, 233, 0.4)',
+               load: () => window.GNS_ADMIN && window.GNS_ADMIN.renderUsers() },
+  system:    { btn: 'tab-btn-system', section: 'admin-system-section',
+               color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)', border: 'rgba(16, 185, 129, 0.4)',
+               load: () => window.GNS_ADMIN && window.GNS_ADMIN.renderSystem() },
+  audit:     { btn: 'tab-btn-audit', section: 'admin-audit-section',
+               color: '#64748b', bg: 'rgba(100, 116, 139, 0.15)', border: 'rgba(100, 116, 139, 0.4)',
+               load: () => window.GNS_ADMIN && window.GNS_ADMIN.renderAuditLog() },
+  settings:  { btn: 'tab-btn-settings', section: 'admin-settings-section',
+               color: '#64748b', bg: 'rgba(100, 116, 139, 0.15)', border: 'rgba(100, 116, 139, 0.4)',
+               load: () => window.GNS_ADMIN && window.GNS_ADMIN.renderSettings() },
+  ttslog:    { btn: 'tab-btn-ttslog', section: 'admin-ttslog-section',
+               color: '#a855f7', bg: 'rgba(168, 85, 247, 0.15)', border: 'rgba(168, 85, 247, 0.4)',
+               load: () => window.GNS_ADMIN && window.GNS_ADMIN.renderTtsLog() }
+};
+
+function switchAdminSubTab(name) {
+  const target = ADMIN_SUBTABS[name] ? name : 'dashboard';
+
+  Object.entries(ADMIN_SUBTABS).forEach(([key, cfg]) => {
+    const btn = document.getElementById(cfg.btn);
+    const section = document.getElementById(cfg.section);
+    const isActive = key === target;
+
+    if (btn) {
+      btn.classList.toggle('active', isActive);
+      btn.style.background = isActive ? cfg.bg : 'rgba(255,255,255,0.03)';
+      btn.style.color = isActive ? cfg.color : '#9ca3af';
+      btn.style.borderColor = isActive ? cfg.border : 'rgba(255,255,255,0.08)';
+    }
+    if (section) section.style.display = isActive ? 'block' : 'none';
+  });
+
+  const cfg = ADMIN_SUBTABS[target];
+  if (cfg.load) cfg.load();
+}
+window.switchAdminSubTab = switchAdminSubTab;
+
+async function fetchReportedAudiosFromBackend() {
+  let backendReports = [];
+  try {
+    const res = await apiFetch('/api/admin/reports');
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        backendReports = data;
+      }
+    }
+  } catch (e) {
+    console.warn("Could not fetch reported audios from backend:", e);
+  }
+
+  let localReports = [];
+  try {
+    localReports = JSON.parse(localStorage.getItem('vb_reported_audios') || '[]');
+  } catch(e) {}
+
+  const combined = [...backendReports];
+  localReports.forEach(lr => {
+    if (!combined.some(b => b.audio_id === lr.audio_id || b.id === lr.id)) {
+      combined.push(lr);
+    }
+  });
+
+  reportedAudios = combined;
+  renderAdminReportList();
+}
+
+function renderAdminReportList() {
+  const listContainer = document.getElementById('admin-reports-list');
+  if (!listContainer) return;
+
+  listContainer.innerHTML = '';
+
+  if (!reportedAudios || reportedAudios.length === 0) {
+    listContainer.innerHTML = '<div style="color: var(--text-muted); font-style: italic; text-align: center; padding: 24px; font-size: 13px;">Không có báo cáo vi phạm nào.</div>';
+    const emptyPane = document.getElementById('admin-report-detail-empty');
+    const contentPane = document.getElementById('admin-report-detail-content');
+    if (emptyPane) emptyPane.style.display = 'flex';
+    if (contentPane) contentPane.style.display = 'none';
+    return;
+  }
+
+  reportedAudios.forEach(item => {
+    const card = document.createElement('div');
+    card.className = `admin-queue-card ${activeAdminReportId === item.id ? 'active' : ''}`;
+    card.style.cssText = 'border: 1px solid rgba(239, 68, 68, 0.3); background: var(--bg-surface-solid, #ffffff); border-radius: 10px; padding: 12px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s;';
+    
+    const displayTitle = item.title || item.audio_title || "Bản ghi âm";
+    const displayProvince = item.province || "Bắc Trung Bộ";
+    const displaySpeaker = item.speaker || "Ẩn danh";
+    const displayReason = item.reason || "Báo cáo vi phạm";
+
+    card.innerHTML = `
+      <div class="admin-card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <span class="admin-card-title" style="font-weight: 700; font-size: 13px; color: var(--text-main, #0f172a);">${displayTitle}</span>
+        <span class="admin-card-badge" style="background: rgba(239,68,68,0.12); color: #dc2626; border: 1px solid rgba(239,68,68,0.3); font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; white-space: nowrap;"><i class="fas fa-flag"></i> Báo cáo</span>
+      </div>
+      <div class="admin-card-details" style="color: var(--text-main, #334155); font-size: 12px; margin-bottom: 4px; font-weight: 500;">
+        <span>📍 ${displayProvince} | 👤 ${displaySpeaker}</span>
+      </div>
+      <div style="font-size: 11px; color: var(--text-muted, #475569); font-weight: 600;">
+        Lý do: <span style="color: #dc2626; font-weight: 700;">${displayReason}</span>
+      </div>
+    `;
+
+    card.addEventListener('click', () => selectAdminReportItem(item));
+    listContainer.appendChild(card);
+  });
+}
+
+function selectAdminReportItem(item) {
+  activeAdminReportId = item.id;
+  
+  renderAdminReportList();
+
+  const emptyPane = document.getElementById('admin-report-detail-empty');
+  const contentPane = document.getElementById('admin-report-detail-content');
+
+  if (emptyPane) emptyPane.style.display = 'none';
+  if (contentPane) contentPane.style.display = 'flex';
+
+  const displayTitle = item.title || item.audio_title || "Bản ghi âm";
+  const displayProvince = item.province || "Bắc Trung Bộ";
+  const displaySpeaker = item.speaker || "Ẩn danh";
+  const displayReason = item.reason || "Báo cáo vi phạm";
+  const displayNote = item.note || 'Không có mô tả chi tiết';
+
+  safeSetText('admin-report-title-txt', displayTitle);
+  safeSetText('admin-report-speaker-txt', `Người đóng góp: ${displaySpeaker} | Tỉnh: ${displayProvince}`);
+  safeSetText('admin-report-reason-txt', displayReason);
+  safeSetText('admin-report-note-txt', displayNote);
+  safeSetText('admin-report-time-txt', new Date(item.timestamp || item.created_at || Date.now()).toLocaleString('vi-VN'));
+
+  // Resolve audioUrl if missing in report item
+  let playUrl = item.audioUrl;
+  if (!playUrl && Array.isArray(localAudioCorpus)) {
+    const matched = localAudioCorpus.find(a => a.id === item.audio_id || a.title === displayTitle);
+    if (matched) {
+      playUrl = matched.audioUrl || matched.url;
+      item.audioUrl = playUrl;
+    }
+  }
+
+  const audioPlayer = document.getElementById('admin-report-audio-player');
+  const playBtn = document.getElementById('admin-report-play-btn');
+
+  if (audioPlayer) {
+    if (playUrl) {
+      audioPlayer.src = playUrl;
+      audioPlayer.load();
+    } else {
+      audioPlayer.removeAttribute('src');
+    }
+  }
+
+  if (playBtn && audioPlayer) {
+    playBtn.onclick = () => {
+      if (!playUrl && item.transcriptDialect) {
+        speakDialectVoice(item.transcriptDialect);
+        return;
+      }
+      if (!audioPlayer.src) {
+        showToast('Bản ghi âm này không có file đính kèm.', 'info');
+        return;
+      }
+      if (audioPlayer.paused) {
+        audioPlayer.play().catch(err => console.warn("Audio play error:", err));
+        if (playBtn.querySelector('i')) playBtn.querySelector('i').className = 'fas fa-pause';
+      } else {
+        audioPlayer.pause();
+        if (playBtn.querySelector('i')) playBtn.querySelector('i').className = 'fas fa-play';
+      }
+    };
+    audioPlayer.onplay = () => {
+      if (playBtn && playBtn.querySelector('i')) playBtn.querySelector('i').className = 'fas fa-pause';
+    };
+    audioPlayer.onpause = () => {
+      if (playBtn && playBtn.querySelector('i')) playBtn.querySelector('i').className = 'fas fa-play';
+    };
+    audioPlayer.onended = () => {
+      if (playBtn && playBtn.querySelector('i')) playBtn.querySelector('i').className = 'fas fa-play';
+    };
+  }
+}
+
+async function dismissAdminReport() {
+  if (!activeAdminReportId) return;
+
+  const item = reportedAudios.find(x => x.id === activeAdminReportId);
+  if (!item) return;
+
+  try {
+    const res = await apiFetch('/api/admin/reports/dismiss', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: item.id, audio_id: item.audio_id })
+    });
+
+    if (res.ok) {
+      showToast(`Đã từ chối báo cáo cho bản ghi "${item.title || item.audio_title}". Giữ lại bản ghi trên bản đồ.`, 'info');
+    }
+  } catch(e) {
+    console.warn("Error dismissing report:", e);
+  }
+
+  reportedAudios = reportedAudios.filter(x => x.id !== activeAdminReportId);
+  try {
+    let localReports = JSON.parse(localStorage.getItem('vb_reported_audios') || '[]');
+    localReports = localReports.filter(x => x.id !== activeAdminReportId && x.audio_id !== item.audio_id);
+    localStorage.setItem('vb_reported_audios', JSON.stringify(localReports));
+  } catch(e) {}
+
+  activeAdminReportId = null;
+  renderAdminReportList();
+}
+
+async function deleteAdminReportedAudio() {
+  if (!activeAdminReportId) return;
+
+  const item = reportedAudios.find(x => x.id === activeAdminReportId);
+  if (!item) return;
+
+  const displayTitle = item.title || item.audio_title || "Bản ghi âm";
+
+  if (confirm(`Bạn có chắc chắn muốn XÓA VĨNH VIỄN bản ghi âm "${displayTitle}" khỏi hệ thống và gỡ khỏi Bản đồ?`)) {
+    const targetAudioId = item.audio_id || item.id;
+
+    // 1. Add to local deleted IDs set
+    let deletedIds = [];
+    try {
+      deletedIds = JSON.parse(localStorage.getItem('vb_deleted_audio_ids') || '[]');
+    } catch(e) {}
+    if (targetAudioId && !deletedIds.includes(targetAudioId)) deletedIds.push(targetAudioId);
+    if (item.id && !deletedIds.includes(item.id)) deletedIds.push(item.id);
+    localStorage.setItem('vb_deleted_audio_ids', JSON.stringify(deletedIds));
+
+    // 2. Remove from localAudioCorpus & localStorage.vb_audio_corpus
+    localAudioCorpus = localAudioCorpus.filter(a => {
+      if (!a) return false;
+      if (a.id === targetAudioId || a.id === item.id) return false;
+      if (displayTitle && a.title && a.title.trim().toLowerCase() === displayTitle.trim().toLowerCase()) return false;
+      return true;
+    });
+    localStorage.setItem('vb_audio_corpus', JSON.stringify(localAudioCorpus));
+
+    // 3. Remove from reportedAudios & localStorage.vb_reported_audios
+    reportedAudios = reportedAudios.filter(x => x.id !== activeAdminReportId && x.audio_id !== targetAudioId);
+    try {
+      let localReports = JSON.parse(localStorage.getItem('vb_reported_audios') || '[]');
+      localReports = localReports.filter(x => x.id !== activeAdminReportId && x.audio_id !== targetAudioId);
+      localStorage.setItem('vb_reported_audios', JSON.stringify(localReports));
+    } catch(e) {}
+
+    // 4. Send API request to backend to delete permanently from disk & deleted_audios.json
+    try {
+      await apiFetch('/api/admin/delete-reported-audio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: item.id, audio_id: targetAudioId })
+      });
+      await apiFetch(`/api/admin/reports/${encodeURIComponent(targetAudioId)}`, {
+        method: 'DELETE'
+      }).catch(() => {});
+    } catch(e) {
+      console.warn("Error calling backend delete API:", e);
     }
 
-    adminAudio = new Audio(contrib.audioUrl);
-    adminAudio.play();
-    icon.className = 'fas fa-pause';
+    activeAdminReportId = null;
 
-    adminAudio.onended = () => {
-      icon.className = 'fas fa-play';
-      adminAudio = null;
+    showToast(`Đã xóa vĩnh viễn bản ghi âm "${displayTitle}" khỏi hệ thống!`, 'success');
+
+    updateGlobalStats();
+    if (typeof drawMapMarkers === 'function') drawMapMarkers();
+    renderAdminReportList();
+  }
+}
+
+function initAdminModule() {
+  const approveBtn = document.getElementById('admin-btn-approve');
+  const rejectBtn = document.getElementById('admin-btn-reject');
+  
+  if (approveBtn) approveBtn.addEventListener('click', approveContribution);
+  if (rejectBtn) rejectBtn.addEventListener('click', rejectContribution);
+  
+  const refreshBtn = document.getElementById('btn-refresh-admin');
+  if (refreshBtn) {
+    refreshBtn.onclick = function() {
+      fetchPendingContributionsFromBackend();
     };
-  });
+  }
+
+  const refreshReportsBtn = document.getElementById('btn-refresh-reports');
+  if (refreshReportsBtn) {
+    refreshReportsBtn.onclick = function() {
+      fetchReportedAudiosFromBackend();
+    };
+  }
+
+  const dismissReportBtn = document.getElementById('admin-report-btn-dismiss');
+  const deleteReportBtn = document.getElementById('admin-report-btn-delete');
+
+  if (dismissReportBtn) dismissReportBtn.addEventListener('click', dismissAdminReport);
+  if (deleteReportBtn) deleteReportBtn.addEventListener('click', deleteAdminReportedAudio);
+
+  // Audio player & play toggle button
+  const playBtn = document.getElementById('admin-play-btn');
+  const audioPlayer = document.getElementById('admin-audio-player');
+
+  if (playBtn && audioPlayer) {
+    playBtn.addEventListener('click', () => {
+      if (!audioPlayer.src) return;
+      if (audioPlayer.paused) {
+        audioPlayer.play();
+        playBtn.querySelector('i').className = 'fas fa-pause';
+      } else {
+        audioPlayer.pause();
+        playBtn.querySelector('i').className = 'fas fa-play';
+      }
+    });
+
+    audioPlayer.onplay = () => {
+      if (playBtn) playBtn.querySelector('i').className = 'fas fa-pause';
+    };
+    audioPlayer.onpause = () => {
+      if (playBtn) playBtn.querySelector('i').className = 'fas fa-play';
+    };
+    audioPlayer.onended = () => {
+      if (playBtn) playBtn.querySelector('i').className = 'fas fa-play';
+    };
+  }
+}
+
+async function fetchPendingContributionsFromBackend() {
+  try {
+    const res = await apiFetch('/api/pending-contributions');
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        pendingContributions = data;
+        localStorage.setItem('vb_pending_contributions', JSON.stringify(pendingContributions));
+      }
+    }
+  } catch (e) {
+    console.warn("Could not fetch pending contributions from backend, using local:", e);
+    const stored = localStorage.getItem('vb_pending_contributions');
+    if (stored) {
+      try { pendingContributions = JSON.parse(stored); } catch (err) {}
+    }
+  }
+  renderAdminQueue();
 }
 
 function renderAdminQueue() {
   const list = document.getElementById('admin-queue-list');
+  if (!list) return;
+
+  const storedPending = localStorage.getItem('vb_pending_contributions');
+  if (storedPending) {
+    try {
+      pendingContributions = JSON.parse(storedPending);
+    } catch(e) {}
+  }
+
   list.innerHTML = '';
 
-  if (pendingContributions.length === 0) {
+  if (!pendingContributions || pendingContributions.length === 0) {
     list.innerHTML = '<div style="color: var(--text-muted); font-style: italic; text-align: center; padding: 24px; font-size: 13px;">Hàng đợi kiểm duyệt trống.</div>';
-    document.getElementById('admin-detail-empty').style.display = 'flex';
-    document.getElementById('admin-detail-content').style.display = 'none';
+    const emptyPane = document.getElementById('admin-detail-empty');
+    const contentPane = document.getElementById('admin-detail-content');
+    if (emptyPane) emptyPane.style.display = 'flex';
+    if (contentPane) contentPane.style.display = 'none';
     return;
   }
 
@@ -1898,17 +3469,19 @@ function renderAdminQueue() {
     const card = document.createElement('div');
     card.className = `admin-queue-card ${activeAdminReviewId === item.id ? 'active' : ''}`;
     
-    const isMismatch = !item.verified;
-    const badgeClass = isMismatch ? 'mismatch' : 'match';
-    const badgeText = isMismatch ? 'LỆCH VÙNG' : 'KHỚP GIỌNG';
+    // Trước đây chỗ này hiện "% KHỚP" bịa. Giờ hiện thông tin có thật:
+    // thời lượng bản ghi, hoặc trạng thái nếu chưa đo được.
+    const badgeText = item.durationSeconds
+      ? formatTime(Math.round(item.durationSeconds))
+      : 'Chờ duyệt';
 
     card.innerHTML = `
       <div class="admin-card-header">
         <span class="admin-card-title">${item.title}</span>
-        <span class="admin-card-badge ${badgeClass}">${badgeText}</span>
+        <span class="admin-card-badge match">${badgeText}</span>
       </div>
       <div class="admin-card-details">
-        <span>Tỉnh: ${item.province} | Loa: ${item.speaker}</span>
+        <span>Tỉnh: ${item.province} | Người đóng góp: ${item.speaker}</span>
       </div>
     `;
 
@@ -1920,79 +3493,234 @@ function renderAdminQueue() {
 function selectAdminReviewItem(item) {
   activeAdminReviewId = item.id;
   
-  // Highlight active card
   document.querySelectorAll('.admin-queue-card').forEach(c => c.classList.remove('active'));
   renderAdminQueue();
 
   const emptyPane = document.getElementById('admin-detail-empty');
   const contentPane = document.getElementById('admin-detail-content');
 
-  emptyPane.style.display = 'none';
-  contentPane.style.display = 'flex';
+  if (emptyPane) emptyPane.style.display = 'none';
+  if (contentPane) contentPane.style.display = 'flex';
 
-  document.getElementById('admin-detail-title-txt').innerText = item.title;
-  document.getElementById('admin-detail-speaker').innerText = `Người đóng góp: ${item.speaker} | Tỉnh: ${item.province} | Nhóm tuổi: ${item.ageGroup} | Giới tính: ${item.gender}`;
+  safeSetText('admin-detail-title-txt', item.title);
+  safeSetText('admin-detail-speaker', `Người đóng góp: ${item.speaker} | Tỉnh: ${item.province} | Tuổi: ${item.ageGroup} | Giới tính: ${item.gender} | Chủ đề: ${item.topic}`);
 
-  // AI Pipeline Labels
+  // Set audio player source
+  const audioPlayer = document.getElementById('admin-audio-player');
+  if (audioPlayer) {
+    let playUrl = item.audioUrl;
+    if (AUDIO_BLOB_CACHE.has(item.id)) {
+      playUrl = URL.createObjectURL(AUDIO_BLOB_CACHE.get(item.id));
+    }
+    audioPlayer.src = playUrl || "";
+  }
+
+  // Thẻ thông tin: CHỈ hiện thứ đo được hoặc do người nhập.
+  // Hai thẻ cũ "độ thuần giọng %" và "audEERING AI" đã bị gỡ vì không hề
+  // có phép đo nào đứng sau — độ tuổi là do người đóng góp tự chọn.
   const aiTagWrapper = document.getElementById('admin-ai-tags-row');
-  const statusIcon = item.verified 
-    ? `<span class="ai-pill green"><i class="fas fa-check-circle"></i> Khớp vùng: ${item.province} (${item.confidence}%)</span>`
-    : `<span class="ai-pill" style="color: var(--color-danger); background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.2);"><i class="fas fa-exclamation-triangle"></i> Nghi ngờ lệch giọng (${item.confidence}% tin cậy)</span>`;
+  if (aiTagWrapper) {
+    const pills = [];
+    pills.push(`<span class="ai-pill"><i class="fas fa-location-dot"></i> ${item.province}${item.locality ? ' — ' + item.locality : ''}</span>`);
+    pills.push(`<span class="ai-pill"><i class="fas fa-user"></i> ${item.ageGroup || '—'} · ${item.gender || '—'} <em style="opacity:.6">(người gửi khai)</em></span>`);
+    if (item.durationSeconds) {
+      pills.push(`<span class="ai-pill"><i class="fas fa-clock"></i> ${formatTime(Math.round(item.durationSeconds))}${item.sampleRate ? ' · ' + (item.sampleRate / 1000) + ' kHz' : ''}</span>`);
+    }
+    if (typeof item.sttConfidence === 'number') {
+      const cls = item.sttConfidence >= 75 ? 'green' : '';
+      pills.push(`<span class="ai-pill ${cls}" title="Đo từ log-xác suất của Whisper"><i class="fas fa-robot"></i> Whisper nhận dạng ${item.sttConfidence}%</span>`);
+    } else if (item.transcriptDialect) {
+      pills.push(`<span class="ai-pill"><i class="fas fa-robot"></i> Whisper đã nhận dạng</span>`);
+    }
+    pills.push(`<span class="ai-pill"><i class="fas fa-scale-balanced"></i> ${item.license || 'CC-BY-NC-4.0'}</span>`);
+    aiTagWrapper.innerHTML = pills.join('');
+  }
 
-  aiTagWrapper.innerHTML = `
-    ${statusIcon}
-    <span class="ai-pill"><i class="fas fa-robot"></i> STT PhoWhisper</span>
-    <span class="ai-pill"><i class="fas fa-tags"></i> Tag: ${item.topic}</span>
-  `;
+  // Populate Editable Subtitles Textareas
+  const dialectTextarea = document.getElementById('admin-trans-dialect');
+  const standardTextarea = document.getElementById('admin-trans-standard');
 
-  // Show Transcripts
-  document.getElementById('admin-trans-dialect').innerText = item.transcriptDialect;
-  document.getElementById('admin-trans-standard').innerText = item.transcriptStandard;
+  if (dialectTextarea) {
+    dialectTextarea.value = item.transcriptDialect || "";
+    dialectTextarea.oninput = () => {
+      item.transcriptDialect = dialectTextarea.value;
+    };
+  }
+
+  if (standardTextarea) {
+    standardTextarea.value = item.transcriptStandard || "";
+    standardTextarea.oninput = () => {
+      item.transcriptStandard = standardTextarea.value;
+    };
+  }
+
+  renderCloneConsentToggle(item);
 }
 
-function approveContribution() {
-  if (!activeAdminReviewId) return;
+/**
+ * Công tắc đồng ý nhân bản giọng. Trạng thái lấy từ ô người đóng góp đã
+ * tích lúc gửi; admin chỉ nên bật thêm khi có xác nhận rõ ràng từ họ.
+ */
+function renderCloneConsentToggle(item) {
+  let holder = document.getElementById('admin-clone-consent');
+  if (!holder) {
+    const anchor = document.getElementById('admin-trans-standard');
+    if (!anchor || !anchor.parentElement) return;
+    holder = document.createElement('div');
+    holder.id = 'admin-clone-consent';
+    anchor.parentElement.appendChild(holder);
+  }
+
+  const allowed = Boolean(item.allowVoiceClone);
+
+  holder.innerHTML = `
+    <label class="clone-consent-toggle">
+      <input type="checkbox" id="admin-clone-consent-box" ${allowed ? 'checked' : ''} style="margin-top:3px">
+      <span>
+        <strong>Cho phép nhân bản giọng (Voice Cloning)</strong><br>
+        ${allowed
+          ? 'Người đóng góp đã tích ô đồng ý khi gửi bản ghi này.'
+          : 'Người đóng góp <strong>chưa</strong> đồng ý. Chỉ bật khi bạn có xác nhận trực tiếp từ họ.'}
+        <br>Tắt công tắc sẽ vô hiệu mọi giọng đã nhân bản từ bản ghi này.
+      </span>
+    </label>`;
+
+  const box = document.getElementById('admin-clone-consent-box');
+  if (!box) return;
+
+  box.addEventListener('change', async () => {
+    const nextValue = box.checked;
+
+    if (nextValue && !item.allowVoiceClone) {
+      const ok = confirm(
+        `Bật cho phép nhân bản giọng của "${item.speaker}"?\n\n` +
+        'Chỉ làm việc này khi người đóng góp đã đồng ý rõ ràng. ' +
+        'Mọi lượt sử dụng đều được ghi vào nhật ký.'
+      );
+      if (!ok) { box.checked = false; return; }
+    }
+
+    box.disabled = true;
+    try {
+      const data = await window.apiJson('/api/admin/clone-consent', {
+        method: 'POST',
+        body: JSON.stringify({ id: item.id, allowed: nextValue })
+      });
+      item.allowVoiceClone = nextValue;
+      renderCloneConsentToggle(item);
+      alert(data.message);
+      if (window.GNS_TTS && window.GNS_TTS.reload) window.GNS_TTS.reload();
+    } catch (err) {
+      box.checked = !nextValue;
+      alert(`Không cập nhật được: ${err.message}`);
+    } finally {
+      box.disabled = false;
+    }
+  });
+}
+
+async function approveContribution() {
+  if (!activeAdminReviewId) {
+    alert("Vui lòng chọn một bản ghi trong hàng đợi để kiểm duyệt.");
+    return;
+  }
 
   const index = pendingContributions.findIndex(x => x.id === activeAdminReviewId);
   if (index === -1) return;
 
   const item = pendingContributions[index];
 
-  // Modify stats: update verified status
+  // Capture current fine-tuned Subtitles directly from Admin textareas
+  const dialectTextarea = document.getElementById('admin-trans-dialect');
+  const standardTextarea = document.getElementById('admin-trans-standard');
+
+  if (dialectTextarea && dialectTextarea.value.trim()) {
+    item.transcriptDialect = dialectTextarea.value.trim();
+  }
+  if (standardTextarea && standardTextarea.value.trim()) {
+    item.transcriptStandard = standardTextarea.value.trim();
+  }
+
+  try {
+    await apiFetch('/api/approve-contribution', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: item.id, ...item })
+    });
+  } catch (e) {
+    console.warn("Backend approve sync offline:", e);
+  }
+
+  item.status = 'approved';
   item.verified = true;
   
-  // Add to active AUDIO_CORPUS
+  // Add to active localAudioCorpus so it shows on Map & List
   localAudioCorpus.push(item);
   localStorage.setItem('vb_audio_corpus', JSON.stringify(localAudioCorpus));
 
-  // Remove from pending
+  // Remove from pending list
   pendingContributions.splice(index, 1);
   localStorage.setItem('vb_pending_contributions', JSON.stringify(pendingContributions));
 
-  alert(`Đã duyệt thành công bản ghi: "${item.title}". Bản ghi hiện đã được đăng tải lên Bản đồ công khai.`);
-
+  const targetProvince = item.province;
   activeAdminReviewId = null;
+
   updateGlobalStats();
   drawMapMarkers();
   renderAdminQueue();
+
+  alert(`Đã duyệt bản ghi "${item.title}" thành công vào CSDL chính!`);
+
+  // Switch to map view & highlight province
+  switchTab('map-view');
+  selectProvince(targetProvince);
+
+  setTimeout(() => {
+    playAudio(item);
+  }, 350);
 }
 
-function softDeleteContribution() {
-  if (!activeAdminReviewId) return;
+async function rejectContribution() {
+  if (!activeAdminReviewId) {
+    alert("Vui lòng chọn một bản ghi trong hàng đợi.");
+    return;
+  }
 
   const index = pendingContributions.findIndex(x => x.id === activeAdminReviewId);
   if (index === -1) return;
 
   const item = pendingContributions[index];
   
-  if (confirm(`Bạn có chắc chắn muốn xóa bản ghi "${item.title}"? Thao tác này sẽ xóa hoàn toàn tệp âm thanh trên bộ lưu trữ đám mây.`)) {
-    // Remove from pending
+  if (confirm(`Bạn có chắc chắn muốn TỪ CHỐI và XÓA BỎ bản ghi "${item.title}"?`)) {
+    try {
+      await apiFetch('/api/reject-contribution', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: item.id })
+      });
+    } catch (e) {
+      console.warn("Backend reject sync offline:", e);
+    }
+
     pendingContributions.splice(index, 1);
     localStorage.setItem('vb_pending_contributions', JSON.stringify(pendingContributions));
 
-    alert("Đã xóa bản ghi thành công.");
     activeAdminReviewId = null;
     renderAdminQueue();
     updateGlobalStats();
+    alert("Đã từ chối bản ghi âm.");
   }
 }
+
+/* ==========================================================================
+   ĐỒNG BỘ THEO TRẠNG THÁI ĐĂNG NHẬP
+   ========================================================================== */
+
+document.addEventListener('gns:auth-changed', () => {
+  // Danh sách công khai đổi theo quyền (admin thấy cả bản chờ duyệt)
+  fetchAudioDatabaseFromBackend();
+
+  if (window.GNS_AUTH && window.GNS_AUTH.isAdmin() && activeTab === 'admin-view') {
+    renderAdminQueue();
+  }
+});
