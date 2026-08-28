@@ -4,6 +4,7 @@ const path = require('path');
 const { exec } = require('child_process');
 const https = require('https');
 const vm = require('vm');
+const guardrails = require(path.join(__dirname, '../lib/guardrails'));
 
 // Load environment variables from .env file
 function loadEnv() {
@@ -55,31 +56,107 @@ function retrieveContext(inputText) {
   if (!inputText) return { khoA: [], khoB: [] };
   if (dialectLexicon.length === 0) loadDatabase();
 
-  const cleanInput = inputText.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g,"");
+  const cleanInput = inputText.toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()?"]/g, ' ');
   const matches = [];
-
-  // Kho A Search (Exact/Fuzzy inclusion)
-  dialectLexicon.forEach(lex => {
-    const lexWord = lex.word.toLowerCase();
-    if (cleanInput.includes(lexWord)) {
-      matches.push(lex);
-    }
-  });
-
-  const uniqueMatches = [];
   const seenIds = new Set();
-  matches.forEach(m => {
-    if (!seenIds.has(m.id)) {
-      seenIds.add(m.id);
-      uniqueMatches.push(m);
+  const seenWords = new Set();
+
+  function testExactWord(text, word) {
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(?:^|[^\\p{L}\\p{M}])(${escaped})(?:[^\\p{L}\\p{M}]|$)`, 'iu');
+    return regex.test(text);
+  }
+
+  const removeDiacritics = (str) => str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D');
+  const cleanInputNoDiacritics = removeDiacritics(cleanInput);
+
+  dialectLexicon.forEach(lex => {
+    if (!lex.word) return;
+
+    const lexWord = lex.word.toLowerCase();
+    const lexWordNoDiacritics = removeDiacritics(lexWord);
+    let score = 0;
+
+    if (testExactWord(cleanInput, lexWord)) {
+      score += 100;
+    } else if (testExactWord(cleanInputNoDiacritics, lexWordNoDiacritics)) {
+      score += 80;
+    } else if (cleanInput.includes(lexWord) && lexWord.length >= 2) {
+      score += 50;
+    } else if (cleanInputNoDiacritics.includes(lexWordNoDiacritics) && lexWordNoDiacritics.length >= 2) {
+      score += 30;
+    }
+
+    if (lex.meaning) {
+      for (const meaning of lex.meaning.split(/[,;/]/)) {
+        const m = meaning.trim().toLowerCase();
+        if (!m || m.length < 2) continue;
+        const mNoDiacritics = removeDiacritics(m);
+        if (testExactWord(cleanInput, m)) {
+          score += 40;
+          break;
+        } else if (testExactWord(cleanInputNoDiacritics, mNoDiacritics)) {
+          score += 20;
+          break;
+        }
+      }
+    }
+
+    if (score > 0 && !seenIds.has(lex.id)) {
+      seenIds.add(lex.id);
+      seenWords.add(lexWord);
+      matches.push({ ...lex, _score: score });
     }
   });
 
-  // Kho B Search Placeholder Query Hook
+  const corePairs = [
+    { dialect: "răng", standard: "sao / tại sao", exp: "Từ hỏi nguyên nhân phổ biến Bắc Trung Bộ" },
+    { dialect: "mô", standard: "đâu", exp: "Từ hỏi vị trí địa lý" },
+    { dialect: "rứa", standard: "thế / vậy", exp: "Trợ từ cảm thán đệm cuối câu" },
+    { dialect: "tê", standard: "kia / đằng kia", exp: "Từ chỉ định khoảng cách xa" },
+    { dialect: "ni", standard: "này / cái này", exp: "Từ chỉ định gần" },
+    { dialect: "nớ", standard: "đó / người đó", exp: "Từ chỉ định đối tượng" },
+    { dialect: "mần", standard: "làm", exp: "Động từ hành động" },
+    { dialect: "chộ", standard: "thấy / nhìn thấy", exp: "Động từ tri giác" },
+    { dialect: "trốc", standard: "đầu", exp: "Danh từ chỉ bộ phận cơ thể" },
+    { dialect: "ngái", standard: "xa", exp: "Tính từ khoảng cách" },
+    { dialect: "dừ", standard: "bây giờ", exp: "Trạng từ chỉ thời gian" },
+    { dialect: "ún", standard: "em nhỏ", exp: "Danh từ quan hệ xưng hô" }
+  ];
+
+  corePairs.forEach(pair => {
+    const dWord = pair.dialect.toLowerCase();
+    if (seenWords.has(dWord)) return;
+
+    let score = 0;
+    if (testExactWord(cleanInput, dWord)) {
+      score = 90;
+    } else if (testExactWord(cleanInputNoDiacritics, removeDiacritics(dWord))) {
+      score = 70;
+    }
+
+    if (score > 0) {
+      seenWords.add(dWord);
+      matches.push({
+        id: `pair_${pair.dialect}`,
+        word: pair.dialect,
+        region: 'Bắc Trung Bộ',
+        provinces: ['Nghệ An', 'Hà Tĩnh', 'Quảng Bình', 'Quảng Trị', 'Thừa Thiên Huế'],
+        meaning: pair.standard,
+        example: `${pair.dialect.charAt(0).toUpperCase() + pair.dialect.slice(1)} là từ phương ngữ phổ biến.`,
+        exampleTranslation: `${pair.standard.charAt(0).toUpperCase() + pair.standard.slice(1)} là nghĩa tiếng phổ thông tương đương.`,
+        culturalInsight: pair.exp,
+        _score: score
+      });
+    }
+  });
+
+  matches.sort((a, b) => b._score - a._score);
+  const uniqueMatches = matches.slice(0, 15).map(({ _score, ...item }) => item);
   const khoBMatches = querySpeechCorpusPlaceholder(cleanInput);
 
   return {
-    khoA: uniqueMatches.slice(0, 10),
+    khoA: uniqueMatches,
     khoB: khoBMatches
   };
 }
@@ -295,6 +372,10 @@ function callOpenRouterStreamAPI(apiKey, messages, clientRes, onErrorFallback) {
     let streamStarted = false;
     let streamBuffer = '';
 
+    const streamSanitizer = guardrails.createStreamSanitizer((safeDelta) => {
+      clientRes.write(`data: ${JSON.stringify({ content: safeDelta })}\n\n`);
+    });
+
     const req = https.request(options, (res) => {
       if (res.statusCode >= 200 && res.statusCode < 300) {
         streamStarted = true;
@@ -315,14 +396,13 @@ function callOpenRouterStreamAPI(apiKey, messages, clientRes, onErrorFallback) {
             if (line.startsWith('data: ')) {
               const dataStr = line.substring(6).trim();
               if (dataStr === '[DONE]') {
-                clientRes.write('data: [DONE]\n\n');
                 continue;
               }
               try {
                 const parsed = JSON.parse(dataStr);
                 const deltaContent = parsed.choices?.[0]?.delta?.content;
                 if (deltaContent) {
-                  clientRes.write(`data: ${JSON.stringify({ content: deltaContent })}\n\n`);
+                  streamSanitizer.processChunk(deltaContent);
                 }
               } catch (e) {
                 // Ignore parse errors for partial or invalid lines
@@ -339,11 +419,12 @@ function callOpenRouterStreamAPI(apiKey, messages, clientRes, onErrorFallback) {
                 const parsed = JSON.parse(dataStr);
                 const deltaContent = parsed.choices?.[0]?.delta?.content;
                 if (deltaContent) {
-                  clientRes.write(`data: ${JSON.stringify({ content: deltaContent })}\n\n`);
+                  streamSanitizer.processChunk(deltaContent);
                 }
               } catch (e) {}
             }
           }
+          streamSanitizer.flush();
           clientRes.write('data: [DONE]\n\n');
           clientRes.end();
         });
@@ -522,7 +603,8 @@ Chỉ trả về JSON thô duy nhất, không thêm bớt từ ngữ thảo lu�
         res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
-        res.write(`data: ${JSON.stringify({ content: responseText, isFallback: true })}\n\n`);
+        const safeText = guardrails.sanitizeOutput(responseText);
+        res.write(`data: ${JSON.stringify({ content: safeText, isFallback: true })}\n\n`);
         res.write('data: [DONE]\n\n');
         res.end();
       };
@@ -587,12 +669,31 @@ Bạn có thể thử hỏi nghĩa của các từ cụ thể như *"răng"*, *"
       }
 
       const RAG = retrieveContext(cleanMessage);
-      const contextBlock = RAG.khoA.map(item => `- Từ địa phương: "${item.word}" -> Nghĩa: "${item.meaning}" (Ví dụ: "${item.example}" dịch là "${item.exampleTranslation}", giải nghĩa: "${item.culturalInsight}")`).join('\n');
+      const contextBlock = RAG.khoA.map((item, idx) => {
+        const provs = Array.isArray(item.provinces) && item.provinces.length ? ` (${item.provinces.join(', ')})` : '';
+        const ex = item.example ? ` | Ví dụ: "${item.example}"${item.exampleTranslation ? ` -> Nghĩa: "${item.exampleTranslation}"` : ''}` : '';
+        return `${idx + 1}. Từ: "${item.word}" | Vùng: ${item.region || 'Bắc Trung Bộ'}${provs} | Nghĩa phổ thông: ${item.meaning}${ex}${item.culturalInsight ? ` | Bối cảnh: ${item.culturalInsight}` : ''}`;
+      }).join('\n');
 
-      const systemMessage = `Bạn là Trợ lý Văn hóa Thổ âm Sông núi – nhà Ngôn ngữ học kiêm Chuyên gia Văn hóa Dân gian 6 tỉnh Bắc Trung Bộ (Thanh Hóa, Nghệ An, Hà Tĩnh, Quảng Bình, Quảng Trị, Thừa Thiên Huế). Hãy giải thích từ vựng, ngữ pháp, và phong tục văn hóa dựa vào Context được cung cấp từ kho dữ liệu. Phải luôn kèm theo ví dụ thực tế bằng tiếng địa phương và dịch nghĩa sang tiếng Việt phổ thông.
+      const systemMessage = `Bạn là "Chatbot Chuyên Gia" của nền tảng Ngân hàng Giọng nói Số (giongnoiso.com) - Nền tảng chuyên biệt nghiên cứu, lưu trữ và lan tỏa Phương ngữ & Văn hóa 6 tỉnh Bắc Trung Bộ (gồm: Thanh Hóa, Nghệ An, Hà Tĩnh, Quảng Bình, Quảng Trị, Thừa Thiên Huế).
 
-Dưới đây là một số thông tin tham chiếu từ cơ sở dữ liệu (Context RAG):
-${contextBlock || '(Không có thông tin liên quan trực tiếp trong cơ sở dữ liệu. Hãy sử dụng kiến thức chuyên môn của bạn về văn hóa 6 tỉnh Bắc Trung Bộ để giải thích)'}`;
+NGUYÊN TẮC BẮT BUỘC:
+1. ĐỊNH VỊ PHƯƠNG NGỮ (DOMAIN CONSTRAINTS):
+   - Tất cả câu hỏi về từ vựng, ngữ nghĩa, cách phát âm, câu nói (như: răng, rứa, mô, tê, ni, nớ, chộ, mần, trốc cún, đi mô...) MẶC ĐỊNH PHẢI ĐƯỢC GIẢI THÍCH DƯỚI GÓC ĐỘ PHƯƠNG NGỮ BẮC TRUNG BỘ.
+   - Tuyệt đối KHÔNG giải thích theo nghĩa sinh học, nghĩa đen phổ thông (ví dụ: "răng" trong bối cảnh phương ngữ có nghĩa là "sao/thế nào/làm sao", KHÔNG PHẢI là răng trong miệng).
+
+2. CẤU TRÚC PHẢN HỒI CHUẨN:
+   - Ý nghĩa: Nêu rõ nghĩa tương đương trong tiếng Việt phổ thông.
+   - Phân vùng địa lý: Nêu rõ từ này thuộc nhóm phương ngữ nào (Nghệ Tĩnh, Bình Trị Thiên hay Thanh Hóa).
+   - Ví dụ minh họa: Đưa ra câu ví dụ giao tiếp thực tế bằng tiếng địa phương kèm bản dịch phổ thông tương ứng (Ví dụ: "Răng mà đẹp rứa?" -> "Sao mà đẹp thế?").
+
+3. SỬ DỤNG CONTEXT TỪ ĐIỂN:
+   - Luôn ưu tiên sử dụng thông tin và ví dụ từ kho ngữ liệu/từ điển được cung cấp trong [CONTEXT].
+   - Nếu từ vựng có nhiều biến thể giữa các tỉnh (ví dụ: Nghệ An dùng khác Huế), hãy chỉ rõ sự khác biệt đó.
+
+[CONTEXT]
+Thông tin tra cứu từ Cơ sở dữ liệu Từ điển Phương ngữ Bắc Trung Bộ (Kho A):
+${contextBlock || '(Không có mục từ trực tiếp trong CSDL. Sử dụng kiến thức chuyên môn về phương ngữ 6 tỉnh Bắc Trung Bộ để giải thích chính xác)'}`;
 
       const messages = [
         { role: 'system', content: systemMessage },

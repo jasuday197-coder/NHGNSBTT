@@ -212,6 +212,15 @@ select.form-input {
   border-color: var(--border-color) !important;
 }
 
+.player-seekbar-track {
+  background: #e2e8f0 !important;
+}
+
+.player-seekbar-container:hover .player-seekbar-track,
+.player-seekbar-container.is-dragging .player-seekbar-track {
+  background: #cbd5e1 !important;
+}
+
 /* --- Bong bóng chatbot --------------------------------------------------- */
 
 .chat-bubble.bot {

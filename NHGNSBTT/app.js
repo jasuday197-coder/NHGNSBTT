@@ -1310,17 +1310,26 @@ function playAudio(audioObj) {
     if (isValidAudioUrl(playUrl)) {
       try {
         mainAudioPlayer = new Audio(playUrl);
+        initSeekbarEvents();
+
+        mainAudioPlayer.onloadedmetadata = () => {
+          if (!mainAudioPlayer) return;
+          updateSeekbarUI(mainAudioPlayer.currentTime || 0, mainAudioPlayer.duration || 0);
+        };
 
         mainAudioPlayer.ontimeupdate = () => {
+          if (!mainAudioPlayer || isSeekingAudio) return;
+          updateSeekbarUI(mainAudioPlayer.currentTime || 0, mainAudioPlayer.duration || 0);
+        };
+
+        mainAudioPlayer.onseeked = () => {
           if (!mainAudioPlayer) return;
-          const cur = formatTime(mainAudioPlayer.currentTime);
-          const dur = formatTime(mainAudioPlayer.duration || 0);
-          safeSetText('track-time-lbl', `${cur} / ${dur}`);
+          updateSeekbarUI(mainAudioPlayer.currentTime || 0, mainAudioPlayer.duration || 0);
         };
 
         mainAudioPlayer.onended = () => {
           if (playBtnIcon) playBtnIcon.className = 'fas fa-play';
-          safeSetText('track-time-lbl', `00:00 / ${formatTime(mainAudioPlayer ? mainAudioPlayer.duration : 0)}`);
+          updateSeekbarUI(0, mainAudioPlayer ? mainAudioPlayer.duration : 0);
           stopWaveformVisualizer();
         };
 
@@ -1458,7 +1467,9 @@ function startYtTimer() {
       if (elapsed < 0) elapsed = 0;
       if (elapsed > duration) elapsed = duration;
 
-      safeSetText('track-time-lbl', `${formatTime(elapsed)} / ${formatTime(duration)}`);
+      if (!isSeekingAudio) {
+        updateSeekbarUI(elapsed, duration);
+      }
 
       if (curTime >= end) {
         ytPlayer.pauseVideo();
@@ -1466,7 +1477,7 @@ function startYtTimer() {
         
         const icon = document.getElementById('player-play-btn-icon');
         if (icon) icon.className = 'fas fa-play';
-        safeSetText('track-time-lbl', `${formatTime(0)} / ${formatTime(duration)}`);
+        updateSeekbarUI(0, duration);
         stopWaveformVisualizer();
         stopYtTimer();
       }
@@ -1482,10 +1493,104 @@ function stopYtTimer() {
 }
 
 function formatTime(secs) {
-  if (isNaN(secs)) return '00:00';
+  if (isNaN(secs) || secs < 0) return '00:00';
   const m = Math.floor(secs / 60).toString().padStart(2, '0');
   const s = Math.floor(secs % 60).toString().padStart(2, '0');
   return `${m}:${s}`;
+}
+
+// --- Interactive Seekbar Logic ---
+let isSeekingAudio = false;
+
+function updateSeekbarUI(currentTimeSec, durationSec) {
+  const fill = document.getElementById('player-seekbar-fill');
+  const thumb = document.getElementById('player-seekbar-thumb');
+  const timeLbl = document.getElementById('track-time-lbl');
+
+  const safeCur = (typeof currentTimeSec === 'number' && !isNaN(currentTimeSec) && currentTimeSec >= 0) ? currentTimeSec : 0;
+  const safeDur = (typeof durationSec === 'number' && !isNaN(durationSec) && durationSec > 0) ? durationSec : 0;
+
+  let pct = 0;
+  if (safeDur > 0) {
+    pct = Math.min(100, Math.max(0, (safeCur / safeDur) * 100));
+  }
+
+  if (fill) fill.style.width = `${pct}%`;
+  if (thumb) thumb.style.left = `${pct}%`;
+
+  if (timeLbl) {
+    timeLbl.innerText = `${formatTime(safeCur)} / ${formatTime(safeDur)}`;
+  }
+}
+
+function seekAudioFromEvent(e) {
+  const container = document.getElementById('player-seekbar-container');
+  if (!container) return;
+
+  const rect = container.getBoundingClientRect();
+  if (!rect.width) return;
+
+  const clientX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
+  let offsetX = clientX - rect.left;
+  if (offsetX < 0) offsetX = 0;
+  if (offsetX > rect.width) offsetX = rect.width;
+
+  const percentage = offsetX / rect.width;
+
+  // 1. HTML5 Audio seek
+  if (mainAudioPlayer && typeof mainAudioPlayer.duration === 'number' && !isNaN(mainAudioPlayer.duration) && mainAudioPlayer.duration > 0) {
+    const targetTime = percentage * mainAudioPlayer.duration;
+    mainAudioPlayer.currentTime = targetTime;
+    updateSeekbarUI(targetTime, mainAudioPlayer.duration);
+    return;
+  }
+
+  // 2. YouTube audio seek
+  if (currentPlayingAudio && currentPlayingAudio.youtube_url && ytPlayer && ytPlayerReady && typeof ytPlayer.seekTo === 'function') {
+    const start = Number(currentPlayingAudio.start_time) || 0;
+    const end = Number(currentPlayingAudio.end_time) || 0;
+    const totalDuration = Math.max(0, end - start);
+
+    if (totalDuration > 0) {
+      const targetTime = start + (percentage * totalDuration);
+      ytPlayer.seekTo(targetTime, true);
+      updateSeekbarUI(targetTime - start, totalDuration);
+    }
+  }
+}
+
+function initSeekbarEvents() {
+  const container = document.getElementById('player-seekbar-container');
+  if (!container || container.dataset.seekbarInited === 'true') return;
+  container.dataset.seekbarInited = 'true';
+
+  const handleStart = (e) => {
+    isSeekingAudio = true;
+    container.classList.add('is-dragging');
+    seekAudioFromEvent(e);
+  };
+
+  const handleMove = (e) => {
+    if (!isSeekingAudio) return;
+    if (e.cancelable) e.preventDefault();
+    seekAudioFromEvent(e);
+  };
+
+  const handleEnd = (e) => {
+    if (isSeekingAudio) {
+      isSeekingAudio = false;
+      container.classList.remove('is-dragging');
+    }
+  };
+
+  container.addEventListener('mousedown', handleStart);
+  container.addEventListener('touchstart', handleStart, { passive: false });
+
+  window.addEventListener('mousemove', handleMove);
+  window.addEventListener('touchmove', handleMove, { passive: false });
+
+  window.addEventListener('mouseup', handleEnd);
+  window.addEventListener('touchend', handleEnd);
 }
 
 // Canvas Waveform Animation
@@ -2441,17 +2546,20 @@ function initTranslatorModule() {
   swapBtn.addEventListener('click', () => {
     const labelL = document.getElementById('translator-lbl-left');
     const labelR = document.getElementById('translator-lbl-right');
+    const translateBtn = document.getElementById('btn-trigger-translate');
 
     if (translatorDirection === 'dialect-to-standard') {
       translatorDirection = 'standard-to-dialect';
       labelL.innerText = 'Tiếng Việt Phổ Thông';
       labelR.innerText = 'Phương ngữ Bắc Trung Bộ';
-      srcArea.placeholder = 'Nhập câu tiếng phổ thông (ví dụ: mẹ tôi làm gì có đầu)';
+      srcArea.placeholder = 'Nhập câu tiếng phổ thông (ví dụ: Hôm nay bạn đi đâu đấy? / Mẹ tôi làm gì có ở đây đâu)...';
+      if (translateBtn) translateBtn.innerHTML = '<i class="fas fa-magic"></i> Dịch sang Phương ngữ';
     } else {
       translatorDirection = 'dialect-to-standard';
       labelL.innerText = 'Phương ngữ Bắc Trung Bộ';
       labelR.innerText = 'Tiếng Việt Phổ Thông';
-      srcArea.placeholder = 'Nhập câu tiếng địa phương (ví dụ: răng bữa ni mi đi mần trễ rứa)';
+      srcArea.placeholder = 'Nhập câu phương ngữ (ví dụ: Bữa ni mi đi mô rứa? / Mệ đi mô rứa mệ ơi)...';
+      if (translateBtn) translateBtn.innerHTML = '<i class="fas fa-magic"></i> Dịch câu phương ngữ';
     }
     srcArea.value = '';
     destArea.innerHTML = '<span class="translator-output empty">Kết quả dịch sẽ hiển thị ở đây...</span>';
@@ -2802,8 +2910,33 @@ async function triggerBotQuestion(text) {
   }
 }
 
+function sanitizeClientOutput(text) {
+  if (typeof text !== 'string' || !text) return text || '';
+  let cleaned = text;
+  const cjkMap = [
+    [/発言者/g, 'người nói'], [/話し手/g, 'người nói'], [/話者/g, 'người nói'],
+    [/聞き手/g, 'người nghe'], [/聴者/g, 'người nghe'], [/対象/g, 'đối tượng'],
+    [/事物/g, 'sự vật'], [/発音/g, 'phát âm'], [/方言/g, 'phương ngữ'], [/単語/g, 'từ vựng']
+  ];
+  for (const [pat, repl] of cjkMap) {
+    cleaned = cleaned.replace(pat, (m, offset, str) => {
+      const prev = offset > 0 ? str[offset - 1] : '';
+      const next = offset + m.length < str.length ? str[offset + m.length] : '';
+      let r = repl;
+      if (/[a-zA-ZàáảãạâầấẩẫậăằắẳẵặèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđÀÁẢÃẠÂẦẤẨẪẬĂẰẮẲẴẶÈÉẺẼẸÊỀẾỂỄỆÌÍỈĨỊÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢÙÚỦŨỤƯỪỨỬỮỰỲÝỶỸᔤĐ]/.test(prev)) r = ' ' + r;
+      if (/[a-zA-ZàáảãạâầấẩẫậăằắẳẵặèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđÀÁẢÃẠÂẦẤẨẪẬĂẰẮẲẴẶÈÉẺẼẸÊỀẾỂỄỆÌÍỈĨỊÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢÙÚỦŨỤƯỪỨỬỮỰỲÝỶỸᔤĐ]/.test(next)) r = r + ' ';
+      return r;
+    });
+  }
+  cleaned = cleaned.replace(/[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af]/g, '');
+  cleaned = cleaned.replace(/user:safety|safety:user|system:safety|\[SAFETY\]|<\|im_start\|>|<\|im_end\|>|<\|system\|>|<\|user\|>|<\|assistant\|>|\[INST\]|\[\/INST\]|<<SYS>>|<<\/SYS>>/gi, '');
+  cleaned = cleaned.replace(/(?:^|\s)(?:user|assistant|system|safety):\s*/gi, ' ');
+  return cleaned.replace(/[ \t]{2,}/g, ' ');
+}
+
 function updateBotBubbleContent(bubble, text) {
-  let formattedText = text
+  const safeText = sanitizeClientOutput(text);
+  let formattedText = safeText
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/\n/g, '<br>');

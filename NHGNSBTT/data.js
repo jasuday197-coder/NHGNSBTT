@@ -5224,7 +5224,7 @@ const AUDIO_CORPUS = [
 // Dữ liệu câu hỏi nhanh và câu trả lời RAG của Chatbot
 const CHATBOT_RAG_DATABASE = [
   {
-    keywords: ["răng", "rang la gi", "nghia la gi"],
+    keywords: ["răng", "rang", "rang la gi", "răng nghĩa là gì"],
     response: `**"Răng"** có nghĩa là **"sao, tại sao, thế nào"** trong tiếng phổ thông.
 - **Khu vực sử dụng:** Rất phổ biến tại Nghệ An, Hà Tĩnh, Quảng Bình, Quảng Trị, Thừa Thiên Huế.
 - **Ví dụ thực tế:** *"Răng bữa ni mi đi học trễ rứa?"* tương đương *"Sao hôm nay mày đi học muộn thế?"*
