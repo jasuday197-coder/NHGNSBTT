@@ -249,6 +249,248 @@
   state.revokeSessions = revokeSessions;
 
   // ------------------------------------------------------------------
+  // Quản lý từ điển phương ngữ
+  // ------------------------------------------------------------------
+
+  state.lexQuery = { q: '', region: '', page: 1, limit: 15 };
+
+  async function renderLexicon() {
+    const host = $('admin-lexicon-panel');
+    if (!host) return;
+
+    host.innerHTML = `
+      <div class="adm-toolbar">
+        <input type="search" id="adm-lex-q" placeholder="Tìm theo từ, nghĩa, ví dụ…" value="${esc(state.lexQuery.q)}" />
+        <select id="adm-lex-region">
+          <option value="">Tất cả cụm vùng</option>
+          <option value="Thanh Hóa"${state.lexQuery.region === 'Thanh Hóa' ? ' selected' : ''}>Thanh Hóa</option>
+          <option value="Nghệ Tĩnh"${state.lexQuery.region === 'Nghệ Tĩnh' ? ' selected' : ''}>Nghệ Tĩnh</option>
+          <option value="Bình Trị Thiên"${state.lexQuery.region === 'Bình Trị Thiên' ? ' selected' : ''}>Bình Trị Thiên</option>
+        </select>
+        <button class="adm-btn primary" id="adm-btn-add-lexicon">
+          <i class="fas fa-plus"></i> Thêm từ mới
+        </button>
+      </div>
+      <div id="adm-lexicon-list"></div>
+      <div id="adm-lexicon-modal-root"></div>`;
+
+    let timer = null;
+    $('adm-lex-q').addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => loadLexicon({ q: $('adm-lex-q').value.trim(), page: 1 }), 250);
+    });
+
+    $('adm-lex-region').addEventListener('change', () => {
+      loadLexicon({ region: $('adm-lex-region').value, page: 1 });
+    });
+
+    $('adm-btn-add-lexicon').addEventListener('click', () => openLexiconModal());
+
+    loadLexicon({});
+  }
+
+  async function loadLexicon(patch = {}) {
+    Object.assign(state.lexQuery, patch);
+    const list = $('adm-lexicon-list');
+    if (!list) return;
+
+    list.innerHTML = '<div class="adm-loading"><i class="fas fa-spinner fa-spin"></i> Đang tải từ điển…</div>';
+
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(state.lexQuery)) if (v) params.set(k, v);
+
+    let d;
+    try {
+      d = await window.apiJson(`/api/admin/lexicon?${params}`);
+    } catch (err) {
+      list.innerHTML = `<div class="adm-loading">${esc(err.message)}</div>`;
+      return;
+    }
+
+    if (!d.items || !d.items.length) {
+      list.innerHTML = '<div class="adm-loading">Không có từ vựng nào khớp.</div>';
+      return;
+    }
+
+    list.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <span class="adm-dim">Tổng số ${d.total} từ vựng (Trang ${d.page}/${d.totalPages})</span>
+        <div style="display:flex; gap:6px;">
+          <button class="adm-btn" ${d.page <= 1 ? 'disabled' : ''} onclick="window.GNS_ADMIN.loadLexicon({page:${d.page - 1}})">
+            <i class="fas fa-chevron-left"></i> Trước
+          </button>
+          <button class="adm-btn" ${d.page >= d.totalPages ? 'disabled' : ''} onclick="window.GNS_ADMIN.loadLexicon({page:${d.page + 1}})">
+            Sau <i class="fas fa-chevron-right"></i>
+          </button>
+        </div>
+      </div>
+      <table class="adm-table">
+        <thead>
+          <tr>
+            <th>Từ vựng</th>
+            <th>Vùng / Tỉnh</th>
+            <th>Phiên âm IPA</th>
+            <th>Nghĩa phổ thông</th>
+            <th>Ví dụ & Dịch</th>
+            <th style="width:140px; text-align:right;">Thao tác</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${d.items.map(w => `
+            <tr>
+              <td><strong style="color:var(--color-primary); font-size:14px;">${esc(w.word)}</strong></td>
+              <td><span class="adm-tag">${esc(w.region || 'Bắc Trung Bộ')}</span></td>
+              <td><code>${esc(w.ipa || '—')}</code></td>
+              <td>${esc(w.meaning || '—')}</td>
+              <td class="adm-dim" style="max-width:240px; font-size:11.5px;">
+                ${w.example ? `"${esc(w.example)}"` : '—'}
+                ${w.exampleTranslation ? `<br/><em>-> ${esc(w.exampleTranslation)}</em>` : ''}
+              </td>
+              <td style="text-align:right;">
+                <button class="adm-btn" onclick='window.GNS_ADMIN.editLexiconWord(${JSON.stringify(w)})' title="Chỉnh sửa">
+                  <i class="fas fa-pen"></i>
+                </button>
+                <button class="adm-btn danger" onclick="window.GNS_ADMIN.deleteLexiconWord('${esc(w.id)}', '${esc(w.word)}')" title="Xóa từ này">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  function openLexiconModal(item = null) {
+    const root = $('adm-lexicon-modal-root');
+    if (!root) return;
+
+    const isEdit = Boolean(item && item.id);
+    root.innerHTML = `
+      <div class="adm-modal-backdrop active" id="adm-lex-modal" style="position:fixed; inset:0; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:9999; padding:16px;">
+        <div class="adm-modal-card" style="background:var(--bg-surface-solid); border:1px solid var(--border-color); border-radius:12px; width:100%; max-width:540px; padding:20px; box-shadow:0 20px 40px rgba(0,0,0,0.4);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; border-bottom:1px solid var(--border-color); padding-bottom:8px;">
+            <h3 style="margin:0; font-size:15px; color:var(--text-main); font-weight:700;">
+              <i class="fas ${isEdit ? 'fa-pen-to-square' : 'fa-plus-circle'}" style="color:var(--color-primary)"></i>
+              ${isEdit ? 'Chỉnh sửa từ vựng' : 'Thêm từ vựng mới vào Từ điển'}
+            </h3>
+            <button class="adm-btn" onclick="window.GNS_ADMIN.closeLexiconModal()" style="padding:4px 8px;">&times;</button>
+          </div>
+          <form id="adm-lex-form" onsubmit="return false;" style="display:flex; flex-direction:column; gap:10px;">
+            <input type="hidden" id="adm-lex-id" value="${esc(item?.id || '')}">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+              <div>
+                <label class="adm-dim" style="display:block; margin-bottom:4px; font-weight:600;">Từ phương ngữ gốc *</label>
+                <input class="auth-input" id="adm-lex-word" type="text" value="${esc(item?.word || '')}" required placeholder="Ví dụ: mô, tê, răng..." />
+              </div>
+              <div>
+                <label class="adm-dim" style="display:block; margin-bottom:4px; font-weight:600;">Cụm phương ngữ *</label>
+                <select class="auth-input" id="adm-lex-reg" style="background:var(--bg-main); color:var(--text-main);">
+                  <option value="Thanh Hóa"${item?.region === 'Thanh Hóa' ? ' selected' : ''}>Thanh Hóa</option>
+                  <option value="Nghệ Tĩnh"${(!item || item.region === 'Nghệ Tĩnh') ? ' selected' : ''}>Nghệ Tĩnh</option>
+                  <option value="Bình Trị Thiên"${item?.region === 'Bình Trị Thiên' ? ' selected' : ''}>Bình Trị Thiên</option>
+                  <option value="Bắc Trung Bộ"${item?.region === 'Bắc Trung Bộ' ? ' selected' : ''}>Bắc Trung Bộ (Chung)</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label class="adm-dim" style="display:block; margin-bottom:4px; font-weight:600;">Nghĩa tiếng phổ thông *</label>
+              <input class="auth-input" id="adm-lex-meaning" type="text" value="${esc(item?.meaning || '')}" required placeholder="Nghĩa tương đương chuẩn..." />
+            </div>
+            <div>
+              <label class="adm-dim" style="display:block; margin-bottom:4px; font-weight:600;">Phiên âm quốc tế IPA (học thuật)</label>
+              <input class="auth-input" id="adm-lex-ipa" type="text" value="${esc(item?.ipa || '')}" placeholder="Ví dụ: /zaŋ˧˧/, /mɔ˧˥/..." />
+            </div>
+            <div>
+              <label class="adm-dim" style="display:block; margin-bottom:4px; font-weight:600;">Câu ví dụ phương ngữ</label>
+              <input class="auth-input" id="adm-lex-ex" type="text" value="${esc(item?.example || '')}" placeholder="Ví dụ câu địa phương..." />
+            </div>
+            <div>
+              <label class="adm-dim" style="display:block; margin-bottom:4px; font-weight:600;">Dịch câu ví dụ sang phổ thông</label>
+              <input class="auth-input" id="adm-lex-extrans" type="text" value="${esc(item?.exampleTranslation || '')}" placeholder="Bản dịch tương ứng..." />
+            </div>
+            <div>
+              <label class="adm-dim" style="display:block; margin-bottom:4px; font-weight:600;">Bối cảnh văn hóa & Sắc thái</label>
+              <textarea class="auth-input" id="adm-lex-cultural" rows="2" placeholder="Ghi chú ngữ cảnh, sắc thái biểu cảm...">${esc(item?.culturalInsight || '')}</textarea>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
+              <button type="button" class="adm-btn" onclick="window.GNS_ADMIN.closeLexiconModal()">Hủy bỏ</button>
+              <button type="button" class="adm-btn primary" id="adm-lex-save-btn" onclick="window.GNS_ADMIN.saveLexiconWord()">
+                <i class="fas fa-save"></i> ${isEdit ? 'Lưu cập nhật' : 'Thêm vào từ điển'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+  }
+
+  function closeLexiconModal() {
+    const modal = $('adm-lex-modal');
+    if (modal) modal.remove();
+  }
+
+  async function saveLexiconWord() {
+    const id = ($('adm-lex-id')?.value || '').trim();
+    const word = ($('adm-lex-word')?.value || '').trim();
+    const region = ($('adm-lex-reg')?.value || '').trim();
+    const meaning = ($('adm-lex-meaning')?.value || '').trim();
+    const ipa = ($('adm-lex-ipa')?.value || '').trim();
+    const example = ($('adm-lex-ex')?.value || '').trim();
+    const exampleTranslation = ($('adm-lex-extrans')?.value || '').trim();
+    const culturalInsight = ($('adm-lex-cultural')?.value || '').trim();
+
+    if (!word || !meaning) {
+      alert('Vui lòng nhập từ vựng và nghĩa phổ thông.');
+      return;
+    }
+
+    const saveBtn = $('adm-lex-save-btn');
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang lưu…';
+    }
+
+    try {
+      const payload = { id: id || undefined, word, region, meaning, ipa, example, exampleTranslation, culturalInsight };
+      const d = await window.apiJson('/api/admin/lexicon', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      alert(d.message || 'Đã lưu mục từ điển.');
+      closeLexiconModal();
+      loadLexicon({});
+    } catch (err) {
+      alert(err.message || 'Lỗi khi lưu từ vựng.');
+    } finally {
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fas fa-save"></i> Lưu';
+      }
+    }
+  }
+
+  async function deleteLexiconWord(id, word) {
+    if (!confirm(`Bạn có chắc chắn muốn xóa từ "${word}" khỏi từ điển không?`)) return;
+    try {
+      const d = await window.apiJson('/api/admin/lexicon/delete', {
+        method: 'POST',
+        body: JSON.stringify({ id })
+      });
+      alert(d.message || `Đã xóa từ "${word}".`);
+      loadLexicon({});
+    } catch (err) {
+      alert(err.message || 'Không thể xóa từ vựng.');
+    }
+  }
+
+  state.renderLexicon = renderLexicon;
+  state.loadLexicon = loadLexicon;
+  state.editLexiconWord = openLexiconModal;
+  state.closeLexiconModal = closeLexiconModal;
+  state.saveLexiconWord = saveLexiconWord;
+  state.deleteLexiconWord = deleteLexiconWord;
+
+  // ------------------------------------------------------------------
   // Sức khoẻ hệ thống
   // ------------------------------------------------------------------
 

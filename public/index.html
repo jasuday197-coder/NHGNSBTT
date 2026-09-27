@@ -8,18 +8,16 @@
   <!-- FontAwesome for Premium Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   
-  <!-- Leaflet map styles -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
   <!-- Core Custom Styles -->
-  <link rel="stylesheet" href="/style.css?v=202608181716" />
-  <link rel="stylesheet" href="/navbar.css?v=202608181716" />
-  <link rel="stylesheet" href="/auth.css?v=202608181716" />
-  <link rel="stylesheet" href="/archive.css?v=202608181716" />
-  <link rel="stylesheet" href="/admin.css?v=202608181716" />
-  <link rel="stylesheet" href="/theme-light.css?v=202608181716" />
-  <link rel="stylesheet" href="/tts.css?v=202608181716" />
-  <link rel="stylesheet" href="/src/components/Minigames/MinigameUI.css?v=202608181716" />
+  <link rel="stylesheet" href="/style.css?v=202609280623" />
+  <link rel="stylesheet" href="/navbar.css?v=202609280623" />
+  <link rel="stylesheet" href="/auth.css?v=202609280623" />
+  <link rel="stylesheet" href="/archive.css?v=202609280623" />
+  <link rel="stylesheet" href="/admin.css?v=202609280623" />
+  <link rel="stylesheet" href="/theme-light.css?v=202609280623" />
+  <link rel="stylesheet" href="/tts.css?v=202609280623" />
+  <link rel="stylesheet" href="/src/components/Minigames/MinigameUI.css?v=202609280623" />
 </head>
 <body>
 
@@ -357,9 +355,21 @@
                       </div>
                     </div>
                   </div>
-                  <button class="btn btn-secondary" id="btn-report-playing-audio" onclick="reportCurrentPlayingAudio()" title="Báo cáo bản ghi âm đang phát" style="font-size: 11px; padding: 6px 10px; color: #ef4444; border-color: rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.1); border-radius: 6px; display: inline-flex; align-items: center; gap: 4px; font-weight: 600; white-space: nowrap;">
-                    <i class="fas fa-flag"></i> Báo cáo
-                  </button>
+                  <!-- Audio Player Extra Controls: Speed & Loop & Report -->
+                  <div class="player-extra-controls">
+                    <div class="speed-selector-group" title="Tốc độ phát âm thanh phương ngữ">
+                      <button type="button" class="btn-speed-opt" data-speed="0.75" onclick="setPlayerSpeed(0.75)">0.75x</button>
+                      <button type="button" class="btn-speed-opt active" data-speed="1" onclick="setPlayerSpeed(1)">1x</button>
+                      <button type="button" class="btn-speed-opt" data-speed="1.25" onclick="setPlayerSpeed(1.25)">1.25x</button>
+                      <button type="button" class="btn-speed-opt" data-speed="1.5" onclick="setPlayerSpeed(1.5)">1.5x</button>
+                    </div>
+                    <button type="button" class="btn-loop-toggle" id="btn-player-loop" onclick="togglePlayerLoop()" title="Lặp lại bản ghi âm">
+                      <i class="fas fa-repeat"></i>
+                    </button>
+                    <button class="btn btn-secondary" id="btn-report-playing-audio" onclick="reportCurrentPlayingAudio()" title="Báo cáo bản ghi âm đang phát" style="font-size: 11px; padding: 6px 10px; color: #ef4444; border-color: rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.1); border-radius: 6px; display: inline-flex; align-items: center; gap: 4px; font-weight: 600; white-space: nowrap;">
+                      <i class="fas fa-flag"></i> Báo cáo
+                    </button>
+                  </div>
 
                 </div>
                 
@@ -761,6 +771,9 @@
                   <span class="mg-score-lbl">Thời gian</span>
                 </div>
               </div>
+              <div id="mg-res-guest-hint" style="display: none; margin-bottom: 14px; padding: 10px 14px; background: rgba(14, 165, 233, 0.1); border: 1px solid rgba(14, 165, 233, 0.25); border-radius: 8px; font-size: 12px; color: #38bdf8; text-align: center;">
+                <i class="fas fa-info-circle"></i> Bạn đang chơi thử chế độ Khách. <a href="#" onclick="window.voiceBankGames.closeResultModal(); if(window.GNS_AUTH) window.GNS_AUTH.openAuthModal('login'); return false;" style="color: #ffffff; font-weight: 700; text-decoration: underline;">Đăng nhập ngay</a> để lưu danh Bảng vàng toàn quốc!
+              </div>
               <div style="display: flex; gap: 12px;">
                 <button class="btn-mg-back" style="flex: 1; justify-content: center; padding: 12px;" onclick="window.voiceBankGames.closeResultModal()">
                   <i class="fas fa-redo"></i> Chơi lượt mới
@@ -891,6 +904,9 @@ Tối đa 100 bản ghi mỗi trang.</code></pre>
             <button class="admin-subtab-btn" id="tab-btn-users" onclick="switchAdminSubTab('users')" style="background: rgba(14, 165, 233, 0.1); color: #0ea5e9; border: 1px solid rgba(14, 165, 233, 0.3); padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
               <i class="fas fa-users-gear"></i> Người dùng
             </button>
+            <button class="admin-subtab-btn" id="tab-btn-lexicon" onclick="switchAdminSubTab('lexicon')" style="background: rgba(6, 182, 212, 0.1); color: #06b6d4; border: 1px solid rgba(6, 182, 212, 0.3); padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+              <i class="fas fa-book-bookmark"></i> Quản lý Từ điển
+            </button>
             <button class="admin-subtab-btn" id="tab-btn-system" onclick="switchAdminSubTab('system')" style="background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
               <i class="fas fa-heart-pulse"></i> Sức khoẻ hệ thống
             </button>
@@ -910,6 +926,7 @@ Tối đa 100 bản ghi mỗi trang.</code></pre>
 
           <div id="admin-dashboard-section" style="display: none;"><div id="admin-dashboard-panel"></div></div>
           <div id="admin-users-section" style="display: none;"><div id="admin-users-panel"></div></div>
+          <div id="admin-lexicon-section" style="display: none;"><div id="admin-lexicon-panel"></div></div>
           <div id="admin-system-section" style="display: none;"><div id="admin-system-panel"></div></div>
           <div id="admin-audit-section" style="display: none;"><div id="admin-audit-panel"></div></div>
           <div id="admin-ttslog-section" style="display: none;"><div id="admin-ttslog-panel"></div></div>
@@ -1387,6 +1404,17 @@ Tối đa 100 bản ghi mỗi trang.</code></pre>
             <input type="text" class="form-control" id="word-example-trans" placeholder="Ví dụ: Sao mày đi học muộn thế?" required />
           </div>
 
+          <div class="form-row">
+            <div class="form-group">
+              <label for="word-ipa-input">Phiên âm ngữ âm quốc tế IPA (tùy chọn)</label>
+              <input type="text" class="form-control" id="word-ipa-input" placeholder="Ví dụ: /zaŋ˧˧/, /tɛ˧˥/..." />
+            </div>
+            <div class="form-group">
+              <label for="word-cultural-input">Ghi chú ngữ cảnh văn hóa (tùy chọn)</label>
+              <input type="text" class="form-control" id="word-cultural-input" placeholder="Bối cảnh sử dụng, sắc thái biểu cảm..." />
+            </div>
+          </div>
+
         </form>
       </div>
       <div class="modal-footer">
@@ -1533,19 +1561,17 @@ Tối đa 100 bản ghi mỗi trang.</code></pre>
     </div>
   </div>
 
-  <!-- Leaflet Script for Map -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <!-- App Custom Scripts -->
-  <script src="/auth.js?v=202608181716"></script>
-  <script src="/router.js?v=202608181716"></script>
-  <script src="/data.js?v=202608181716"></script>
-  <script src="/src/components/Minigames/MinigameEngine.js?v=202608181716"></script>
-  <script src="/games.js?v=202608181716"></script>
-  <script src="/app.js?v=202608181716"></script>
-  <script src="/archive.js?v=202608181716"></script>
-  <script src="/contribute.js?v=202608181716"></script>
-  <script src="/admin.js?v=202608181716"></script>
-  <script src="/tts.js?v=202608181716"></script>
+  <script src="/auth.js?v=202609280623"></script>
+  <script src="/router.js?v=202609280623"></script>
+  <script src="/data.js?v=202609280623"></script>
+  <script src="/src/components/Minigames/MinigameEngine.js?v=202609280623"></script>
+  <script src="/games.js?v=202609280623"></script>
+  <script src="/app.js?v=202609280623"></script>
+  <script src="/archive.js?v=202609280623"></script>
+  <script src="/contribute.js?v=202609280623"></script>
+  <script src="/admin.js?v=202609280623"></script>
+  <script src="/tts.js?v=202609280623"></script>
 </body>
 </html>

@@ -335,7 +335,7 @@ function initMapModule() {
   const mapWrapper = document.getElementById('geojson-map-container');
 
   // Load geojson
-  fetch('/vietnam.geojson?v=202608181716')
+  fetch('/vietnam.geojson?v=202609280623')
     .then(res => res.json())
     .then(geojson => {
       cachedGeojsonData = geojson;
@@ -409,6 +409,59 @@ function initMapModule() {
     const factor = e.deltaY < 0 ? 1.15 : 0.85;
     zoomMap(factor);
   }, { passive: false });
+
+  // Touch gesture support: 1-finger pan, 2-finger pinch-to-zoom
+  let touchStartDist = 0;
+  let isTouchPanning = false;
+
+  mapWrapper.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1) {
+      isTouchPanning = true;
+      startDragX = e.touches[0].clientX - currentTranslateX;
+      startDragY = e.touches[0].clientY - currentTranslateY;
+    } else if (e.touches.length === 2) {
+      isTouchPanning = false;
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      touchStartDist = Math.hypot(dx, dy);
+    }
+  }, { passive: true });
+
+  mapWrapper.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 1 && isTouchPanning) {
+      if (currentScale > 1.05) {
+        e.preventDefault(); // prevent window scroll when zoomed in and panning
+      }
+      currentTranslateX = e.touches[0].clientX - startDragX;
+      currentTranslateY = e.touches[0].clientY - startDragY;
+      constrainPan();
+      updateMapTransform();
+    } else if (e.touches.length === 2 && touchStartDist > 0) {
+      e.preventDefault(); // pinch zoom
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const newDist = Math.hypot(dx, dy);
+      if (newDist > 10) {
+        const factor = newDist / touchStartDist;
+        if (Math.abs(factor - 1) > 0.02) {
+          zoomMap(factor > 1 ? 1.05 : 0.95);
+          touchStartDist = newDist;
+        }
+      }
+    }
+  }, { passive: false });
+
+  mapWrapper.addEventListener('touchend', (e) => {
+    if (e.touches.length === 0) {
+      isTouchPanning = false;
+      touchStartDist = 0;
+    } else if (e.touches.length === 1) {
+      isTouchPanning = true;
+      startDragX = e.touches[0].clientX - currentTranslateX;
+      startDragY = e.touches[0].clientY - currentTranslateY;
+      touchStartDist = 0;
+    }
+  }, { passive: true });
 }
 
 function constrainPan() {
@@ -1290,6 +1343,9 @@ function playAudio(audioObj) {
       videoId: ytId,
       startSeconds: audioObj.start_time || 0
     });
+    if (typeof ytPlayer.setPlaybackRate === 'function') {
+      try { ytPlayer.setPlaybackRate(currentPlaybackSpeed); } catch (e) {}
+    }
 
     if (playBtnIcon) playBtnIcon.className = 'fas fa-pause';
     startWaveformVisualizer();
@@ -1310,6 +1366,8 @@ function playAudio(audioObj) {
     if (isValidAudioUrl(playUrl)) {
       try {
         mainAudioPlayer = new Audio(playUrl);
+        mainAudioPlayer.playbackRate = currentPlaybackSpeed;
+        mainAudioPlayer.loop = isAudioLooping;
         initSeekbarEvents();
 
         mainAudioPlayer.onloadedmetadata = () => {
@@ -1472,6 +1530,11 @@ function startYtTimer() {
       }
 
       if (curTime >= end) {
+        if (isAudioLooping) {
+          ytPlayer.seekTo(start);
+          ytPlayer.playVideo();
+          return;
+        }
         ytPlayer.pauseVideo();
         ytPlayer.seekTo(start);
         
@@ -1649,126 +1712,48 @@ function blobToDataURL(blob) {
 }
 
 // --------------------------------------------------------------------------
-// Microphone Audio & File Upload Contribution Flow
+// Audio Playback Speed & Loop Controls
 // --------------------------------------------------------------------------
-function setupAudioRecorder() {
-  const openFab = document.getElementById('open-contribute-fab');
-  const closeBtn = document.getElementById('close-modal-btn');
-  const cancelBtn = document.getElementById('btn-cancel-contrib');
-  const submitBtn = document.getElementById('btn-submit-contrib');
-  const modal = document.getElementById('contribution-modal');
-  const micBtn = document.getElementById('mic-trigger-btn');
-  const fileInput = document.getElementById('contrib-file');
+let currentPlaybackSpeed = 1.0;
+let isAudioLooping = false;
 
-  openFab.addEventListener('click', () => {
-    // Reset form states
-    document.getElementById('contrib-form').reset();
-    const consentEl = document.getElementById('contrib-consent');
-    if (consentEl) consentEl.checked = false;
-    recordedBlob = null;
-    audioChunks = [];
-    if (fileInput) fileInput.value = '';
-    document.getElementById('record-time-text').innerText = '00:00 (Nhấn mic để bắt đầu thu âm)';
-    document.getElementById('record-status').innerText = 'Chưa thu âm';
-    micBtn.className = 'mic-circle';
-    submitBtn.disabled = true;
-
-    modal.classList.add('active');
-  });
-
-  const closeModal = () => {
-    stopRecording();
-    modal.classList.remove('active');
-  };
-
-  closeBtn.addEventListener('click', closeModal);
-  cancelBtn.addEventListener('click', closeModal);
-
-  // Micro Button click handler for recording
-  micBtn.addEventListener('click', () => {
-    if (mediaRecorder && mediaRecorder.state === 'recording') {
-      stopRecording();
-    } else {
-      if (fileInput) fileInput.value = '';
-      startRecording();
-    }
-  });
-
-  fileInput.addEventListener('change', () => {
-    if (fileInput.files && fileInput.files.length > 0) {
-      stopRecording();
-      recordedBlob = fileInput.files[0];
-      const fileName = recordedBlob.name;
-      safeSetText('record-status', `Đã tải lên tệp: ${fileName}`);
-      safeSetText('record-time-text', `Tệp: ${fileName} — Đã sẵn sàng gửi`);
-      
-      // Immediately trigger validateForm so submit button is enabled
-      validateForm();
-
-      // Extract duration from audio file metadata asynchronously
-      const tempAudio = new Audio();
-      const objectUrl = URL.createObjectURL(recordedBlob);
-      tempAudio.src = objectUrl;
-
-      tempAudio.onloadedmetadata = () => {
-        const dur = Math.round(tempAudio.duration || 0);
-        recordDurationSec = dur;
-        URL.revokeObjectURL(objectUrl);
-        safeSetText('record-time-text', `Tệp MP3/Audio (${formatTime(dur)}) — Đã sẵn sàng gửi`);
-        validateForm();
-      };
-
-      tempAudio.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-        recordDurationSec = 10;
-        safeSetText('record-time-text', `Tệp ${fileName} — Đã sẵn sàng gửi`);
-        validateForm();
-      };
-    }
-  });
-
-  // Watch all inputs inside form to automatically update submit button status
-  const contribForm = document.getElementById('contrib-form');
-  if (contribForm) {
-    contribForm.addEventListener('input', validateForm);
-    contribForm.addEventListener('change', validateForm);
-    contribForm.addEventListener('keyup', validateForm);
-    contribForm.onsubmit = function(e) {
-      if (e) e.preventDefault();
-      if (submitBtn && !submitBtn.disabled) {
-        submitBtn.click();
-      }
-      return false;
-    };
+function setPlayerSpeed(speed) {
+  currentPlaybackSpeed = Number(speed) || 1.0;
+  if (mainAudioPlayer) {
+    mainAudioPlayer.playbackRate = currentPlaybackSpeed;
   }
+  if (ytPlayer && ytPlayerReady && typeof ytPlayer.setPlaybackRate === 'function') {
+    try { ytPlayer.setPlaybackRate(currentPlaybackSpeed); } catch (e) {}
+  }
+  document.querySelectorAll('.btn-speed-opt').forEach(btn => {
+    const s = Number(btn.getAttribute('data-speed'));
+    if (Math.abs(s - currentPlaybackSpeed) < 0.01) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+}
 
-  if (submitBtn) {
-    submitBtn.onclick = function(e) {
-      if (e) e.preventDefault();
-      console.log("[SUBMIT CLICKED] Starting submission process...");
-
-      const titleInput = document.getElementById('contrib-title')?.value.trim() || '';
-      const speaker = document.getElementById('contrib-speaker')?.value.trim() || 'Ẩn danh';
-      const province = document.getElementById('contrib-province')?.value || 'Thừa Thiên Huế';
-      const ageGroup = document.getElementById('contrib-age')?.value || '18-35 tuổi';
-      const gender = document.getElementById('contrib-gender')?.value || 'Nam';
-      const topic = document.getElementById('contrib-topic')?.value || 'Lịch sử & Văn hóa';
-
-      const fileInput = document.getElementById('contrib-file');
-      const targetBlob = recordedBlob || (fileInput && fileInput.files && fileInput.files[0]);
-
-      handleAudioSubmission({
-        titleInput,
-        speaker,
-        province,
-        ageGroup,
-        gender,
-        topic,
-        targetBlob
-      });
-    };
+function togglePlayerLoop() {
+  isAudioLooping = !isAudioLooping;
+  if (mainAudioPlayer) {
+    mainAudioPlayer.loop = isAudioLooping;
+  }
+  const loopBtn = document.getElementById('btn-player-loop');
+  if (loopBtn) {
+    if (isAudioLooping) {
+      loopBtn.classList.add('active');
+      loopBtn.title = 'Đang bật lặp lại bản ghi (bấm để tắt)';
+    } else {
+      loopBtn.classList.remove('active');
+      loopBtn.title = 'Bật lặp lại bản ghi âm';
+    }
   }
 }
+
+window.setPlayerSpeed = setPlayerSpeed;
+window.togglePlayerLoop = togglePlayerLoop;
 function parseTimeToSeconds(timeStr) {
   if (!timeStr) return 0;
   timeStr = timeStr.trim();
@@ -2380,34 +2365,69 @@ function initDictionaryModule() {
   closeCont.addEventListener('click', () => modalWord.classList.remove('active'));
   cancelWord.addEventListener('click', () => modalWord.classList.remove('active'));
 
-  submitWord.addEventListener('click', () => {
+  submitWord.addEventListener('click', async () => {
     const word = document.getElementById('word-input').value.trim();
     const meaning = document.getElementById('word-meaning-input').value.trim();
     const region = document.getElementById('word-region').value;
     const example = document.getElementById('word-example').value.trim();
     const exampleTrans = document.getElementById('word-example-trans').value.trim();
+    const ipaInput = document.getElementById('word-ipa-input');
+    const culturalInput = document.getElementById('word-cultural-input');
+    const ipa = ipaInput ? ipaInput.value.trim() : '';
+    const cultural = culturalInput ? culturalInput.value.trim() : '';
 
     if (!word || !meaning || !region || !example || !exampleTrans) {
       alert("Vui lòng nhập đầy đủ các trường thông tin bắt buộc!");
       return;
     }
 
-    const newWord = {
-      id: "l_" + Date.now(),
+    const originalText = submitWord.innerHTML;
+    submitWord.disabled = true;
+    submitWord.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang gửi...';
+
+    const payload = {
       word: word.toLowerCase(),
-      region: region,
-      meaning: meaning,
-      example: example,
+      region,
+      meaning,
+      example,
       exampleTranslation: exampleTrans,
-      culturalInsight: `Từ phương ngữ được đóng góp bởi thành viên cộng đồng. Giải thích văn hóa sơ bộ: Từ "${word}" thể hiện phong cách giao tiếp đặc trưng của vùng ${region}, biểu đạt nghĩa "${meaning}".`
+      ipa: ipa || null,
+      culturalInsight: cultural || `Từ phương ngữ được đóng góp bởi thành viên cộng đồng. Giải thích văn hóa sơ bộ: Từ "${word}" thể hiện phong cách giao tiếp đặc trưng của vùng ${region}, biểu đạt nghĩa "${meaning}".`
     };
 
-    localLexicon.push(newWord);
-    localStorage.setItem('vb_lexicon', JSON.stringify(localLexicon));
-    updateGlobalStats();
-    filterDictionary();
-    modalWord.classList.remove('active');
-    alert("Từ vựng mới đã được cộng đồng đóng góp thành công!");
+    try {
+      const res = await apiFetch('/api/lexicon', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Lỗi khi gửi từ vựng lên máy chủ.');
+
+      const item = data.item || Object.assign({ id: "l_" + Date.now() }, payload);
+      const existingIdx = localLexicon.findIndex(x => x.word.toLowerCase() === item.word.toLowerCase() && x.region === item.region);
+      if (existingIdx >= 0) {
+        localLexicon[existingIdx] = item;
+      } else {
+        localLexicon.push(item);
+      }
+      localStorage.setItem('vb_lexicon', JSON.stringify(localLexicon));
+      updateGlobalStats();
+      filterDictionary();
+      modalWord.classList.remove('active');
+      alert(data.message || "Từ vựng mới đã được đóng góp thành công vào Ngân hàng Giọng nói Số!");
+    } catch (err) {
+      console.warn('[Lexicon] Lỗi kết nối backend, lưu dự phòng cục bộ:', err);
+      const fallbackItem = Object.assign({ id: "l_" + Date.now() }, payload);
+      localLexicon.push(fallbackItem);
+      localStorage.setItem('vb_lexicon', JSON.stringify(localLexicon));
+      updateGlobalStats();
+      filterDictionary();
+      modalWord.classList.remove('active');
+      alert("Đã lưu từ vựng vào bộ nhớ cục bộ (ngoại tuyến).");
+    } finally {
+      submitWord.disabled = false;
+      submitWord.innerHTML = originalText;
+    }
   });
 }
 
@@ -3225,6 +3245,9 @@ const ADMIN_SUBTABS = {
   users:     { btn: 'tab-btn-users', section: 'admin-users-section',
                color: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.15)', border: 'rgba(14, 165, 233, 0.4)',
                load: () => window.GNS_ADMIN && window.GNS_ADMIN.renderUsers() },
+  lexicon:   { btn: 'tab-btn-lexicon', section: 'admin-lexicon-section',
+               color: '#06b6d4', bg: 'rgba(6, 182, 212, 0.15)', border: 'rgba(6, 182, 212, 0.4)',
+               load: () => window.GNS_ADMIN && window.GNS_ADMIN.renderLexicon() },
   system:    { btn: 'tab-btn-system', section: 'admin-system-section',
                color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)', border: 'rgba(16, 185, 129, 0.4)',
                load: () => window.GNS_ADMIN && window.GNS_ADMIN.renderSystem() },

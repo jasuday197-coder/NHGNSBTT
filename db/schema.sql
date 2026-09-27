@@ -234,3 +234,23 @@ CREATE TABLE IF NOT EXISTS app_settings (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -------------------------------------------------------------
+-- Bang diem tro choi phuong ngu (Minigames Leaderboard)
+-- -------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS minigame_scores (
+  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id       BIGINT UNSIGNED NULL,
+  player_name   VARCHAR(190)    NOT NULL,
+  game_id       TINYINT UNSIGNED NOT NULL,  -- 1: Trac nghiem am thanh, 2: Ghep cap, 3: Do chu
+  score         INT UNSIGNED    NOT NULL DEFAULT 0,
+  streak        INT UNSIGNED    NOT NULL DEFAULT 0,
+  time_seconds  DECIMAL(6,2)    NULL,
+  ip            VARCHAR(45)     NULL,
+  created_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_game_score (game_id, score DESC),
+  KEY idx_game_created (game_id, created_at),
+  KEY idx_user_scores (user_id),
+  CONSTRAINT fk_minigame_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

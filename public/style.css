@@ -715,6 +715,75 @@ button, input, select, textarea {
   white-space: nowrap;
 }
 
+/* Audio Player Extra Controls: Speed & Loop */
+.player-extra-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.speed-selector-group {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.btn-speed-opt {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.btn-speed-opt:hover {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.btn-speed-opt.active {
+  background: var(--color-primary, #0ea5e9);
+  color: #ffffff;
+  box-shadow: 0 1px 4px rgba(14, 165, 233, 0.4);
+}
+
+.btn-loop-toggle {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 12px;
+}
+
+.btn-loop-toggle:hover {
+  color: #f8fafc;
+  border-color: var(--color-primary, #0ea5e9);
+}
+
+.btn-loop-toggle.active {
+  background: rgba(14, 165, 233, 0.18);
+  color: var(--color-primary, #0ea5e9);
+  border-color: var(--color-primary, #0ea5e9);
+  box-shadow: 0 0 8px rgba(14, 165, 233, 0.3);
+}
+
 /* Dual Subtitle Container (Phân khung dưới cùng bên phải) */
 .transcript-box {
   margin-top: 14px;

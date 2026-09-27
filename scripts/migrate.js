@@ -318,7 +318,8 @@ async function summarize() {
      UNION ALL SELECT 'lexicon', COUNT(*) FROM lexicon
      UNION ALL SELECT 'audio_records', COUNT(*) FROM audio_records
      UNION ALL SELECT 'audio_reports', COUNT(*) FROM audio_reports
-     UNION ALL SELECT 'chatbot_rag', COUNT(*) FROM chatbot_rag`
+     UNION ALL SELECT 'chatbot_rag', COUNT(*) FROM chatbot_rag
+     UNION ALL SELECT 'minigame_scores', COUNT(*) FROM minigame_scores`
   );
   for (const row of rows) log(`${row.bang.padEnd(16)} ${row.so_dong}`);
 

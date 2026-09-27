@@ -143,17 +143,10 @@ class MinigameEngine {
   promptStartGame(gameId) {
     const isLoggedIn = Boolean(window.GNS_AUTH && typeof window.GNS_AUTH.isLoggedIn === 'function' && window.GNS_AUTH.isLoggedIn());
 
-    if (!isLoggedIn) {
-      alert('Vui lòng đăng nhập tài khoản để tham gia thử thách và lưu thành tích vào Bảng xếp hạng!');
-      if (window.GNS_AUTH && typeof window.GNS_AUTH.openAuthModal === 'function') {
-        window.GNS_AUTH.openAuthModal('login');
-      }
-      return;
-    }
-
-    const user = window.GNS_AUTH.user;
-    this.playerName = user ? (user.fullName || user.username) : 'Thành viên';
+    const user = isLoggedIn ? window.GNS_AUTH.user : null;
+    this.playerName = user ? (user.fullName || user.username) : 'Khách trải nghiệm';
     this.userId = user ? user.id : null;
+    this.isGuest = !isLoggedIn;
 
     if (gameId) {
       this.launchGame(gameId);
@@ -815,6 +808,20 @@ class MinigameEngine {
     this.leaderboard.push(entry);
     localStorage.setItem('vb_leaderboard', JSON.stringify(this.leaderboard));
 
+    // Send score to backend server
+    if (typeof window.apiFetch === 'function') {
+      window.apiFetch('/api/games/score', {
+        method: 'POST',
+        body: JSON.stringify({
+          gameId: Number(this.activeGameId),
+          score: this.score,
+          streak: this.streak,
+          timeSeconds: timeSec,
+          playerName: playerName
+        })
+      }).catch(err => console.warn('[Minigame] Không gửi được điểm lên server:', err));
+    }
+
     // Show Results Modal
     this.openResultModal(entry);
     this.triggerConfetti();
@@ -827,6 +834,11 @@ class MinigameEngine {
     MinigameEngine.safeSetText('mg-res-score', entry.score);
     MinigameEngine.safeSetText('mg-res-correct', this.correctCount);
     MinigameEngine.safeSetText('mg-res-time', `${entry.timeSec}s`);
+
+    const guestHint = document.getElementById('mg-res-guest-hint');
+    if (guestHint) {
+      guestHint.style.display = this.isGuest ? 'block' : 'none';
+    }
 
     modalBackdrop.classList.add('active');
   }
@@ -926,7 +938,7 @@ class MinigameEngine {
     this.renderLeaderboard();
   }
 
-  renderLeaderboard() {
+  async renderLeaderboard() {
     const listEl = document.getElementById('mg-lb-list');
     if (!listEl) return;
 
@@ -950,22 +962,46 @@ class MinigameEngine {
       }
     });
 
-    // Filter by selected minigame
-    let data = this.leaderboard.filter(item => Number(item.gameId) === this.selectedLeaderboardGame);
+    listEl.innerHTML = `
+      <div style="text-align: center; padding: 25px; color: #64748b;">
+        <i class="fas fa-spinner fa-spin" style="font-size: 26px; color: #0284c7; margin-bottom: 8px;"></i>
+        <p style="font-size: 13px; margin: 0;">Đang kết nối bảng xếp hạng máy chủ...</p>
+      </div>
+    `;
 
-    // Filter "Tuần này" (within past 7 days)
-    if (this.selectedLeaderboardTime === 'week') {
-      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-      data = data.filter(item => item.timestamp >= sevenDaysAgo);
+    let serverItems = null;
+    try {
+      if (window.apiJson) {
+        const res = await window.apiJson(`/api/games/leaderboard?gameId=${this.selectedLeaderboardGame}&timeRange=${this.selectedLeaderboardTime}&limit=10`);
+        if (res && res.success && Array.isArray(res.items)) {
+          serverItems = res.items;
+        }
+      }
+    } catch (e) {
+      console.warn('Leaderboard API fetch warning, fallback to local:', e);
     }
 
-    // Sort by highest score descending, then lowest time ascending
-    data.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      return a.timeSec - b.timeSec;
-    });
-
-    const top10 = data.slice(0, 10);
+    let top10 = [];
+    if (serverItems && serverItems.length > 0) {
+      top10 = serverItems.map(item => ({
+        name: item.name || 'Người chơi',
+        score: item.score,
+        timeSec: item.time != null ? item.time : (item.time_seconds || null),
+        dateStr: item.date ? new Date(item.date).toLocaleDateString('vi-VN') : ''
+      }));
+    } else {
+      // Local fallback
+      let data = (this.leaderboard || []).filter(item => Number(item.gameId) === this.selectedLeaderboardGame);
+      if (this.selectedLeaderboardTime === 'week') {
+        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        data = data.filter(item => item.timestamp >= sevenDaysAgo);
+      }
+      data.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return (a.timeSec || 0) - (b.timeSec || 0);
+      });
+      top10 = data.slice(0, 10);
+    }
 
     if (top10.length === 0) {
       listEl.innerHTML = `
@@ -986,13 +1022,15 @@ class MinigameEngine {
       else if (idx === 2) { rankBadge = '🥉'; topClass = 'top-3'; }
 
       const displayName = item.name || item.username || 'Thành viên';
+      const timeDisplay = (item.timeSec != null && item.timeSec !== '--') ? `⏱️ ${item.timeSec}s` : '';
+      const dateDisplay = item.dateStr ? ` • ${item.dateStr}` : '';
 
       return `
         <div class="mg-lb-row ${topClass}">
           <div class="mg-lb-rank">${rankBadge}</div>
           <div class="mg-lb-info">
             <div class="mg-lb-name">${this.escapeHtml(displayName)}</div>
-            <div class="mg-lb-sub">⏱️ ${item.timeSec}s • ${item.dateStr}</div>
+            <div class="mg-lb-sub">${timeDisplay}${dateDisplay}</div>
           </div>
           <div class="mg-lb-score">${item.score} đ</div>
         </div>
